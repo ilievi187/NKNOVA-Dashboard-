@@ -61,7 +61,13 @@ impl App {
             Ok(s) => (s, "Ready — no game files changed".to_owned(), false),
             Err(e) => (Settings::default(), format!("Settings error: {e}"), true),
         };
-        Self { page: Page::Installer, settings, plan: None, status,
+        // CI can capture the archive workflow without mouse/keyboard injection.
+        let initial_page = if std::env::var("NKNOVA_PREVIEW_PAGE").as_deref() == Ok("archives") {
+            Page::Downloads
+        } else {
+            Page::Installer
+        };
+        Self { page: initial_page, settings, plan: None, status,
                error, history: vec!["NKNOVA Rust desktop initialized".to_owned()],
                archive_manifest: String::new(), archive_audit: None,
                archive_worker: None, archive_progress: String::new(),

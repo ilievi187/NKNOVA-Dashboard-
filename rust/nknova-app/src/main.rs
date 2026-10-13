@@ -130,28 +130,11 @@ impl App {
     }
 
     fn open_existing_installer(&mut self) {
-        if let Err(e) = GraphicsOnlyPlan::prepare(&self.settings) {
-            self.plan = None;
-            self.report(format!("BLOCKED: {e}"), true);
-            return;
-        }
-        match nknova_core::capacity::inspect(
-            &self.plan.as_ref().map(|p| &p.target).cloned().unwrap_or_default(),
-            &self.plan.as_ref().map(|p| &p.archive).cloned().unwrap_or_default(),
-            self.settings.variant,
-        ) {
-            Ok(space) if space.sufficient => {}
-            Ok(space) => {
-                self.plan = None;
-                self.report(format!("BLOCKED: Space changed since preflight. {}", space.summary()), true);
-                return;
-            }
-            Err(e) => {
-                self.plan = None;
-                self.report(format!("BLOCKED: Cannot recheck disk capacity: {e}"), true);
-                return;
-            }
-        }
+        // The launch button may be clicked long after the last preflight.
+        // Re-evaluate both directory safety and disk capacity, never reuse
+        // a stale PASS obtained before another job consumed free space.
+        self.preflight();
+        if self.plan.is_none() { return; }
         match nknova_core::check_legacy_dashboard(&self.settings.legacy_dashboard) {
             Ok(binary) => {
                 let mut command = Command::new(&binary);

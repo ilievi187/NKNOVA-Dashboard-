@@ -345,7 +345,12 @@ mod tests {
 
     fn fixture(bytes: &[u8]) -> (PathBuf, Manifest) {
         let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        let dir = std::env::temp_dir().join(format!("nknova-archive-{}-{nonce}", std::process::id()));
+        // Windows timestamp resolution is too coarse to guarantee unique
+        // parallel test fixtures. Share the process-wide atomic sequence.
+        let unique = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "nknova-archive-{}-{nonce}-{unique}", std::process::id()
+        ));
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("my-pack.zip"), bytes).unwrap();
         let (sha, _) = hash_file(&dir.join("my-pack.zip")).unwrap();

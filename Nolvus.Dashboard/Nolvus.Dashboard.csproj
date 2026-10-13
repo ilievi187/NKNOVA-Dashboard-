@@ -14,7 +14,8 @@
 
     <PublishSingleFile>false</PublishSingleFile>
     <SelfContained>false</SelfContained>
-    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(OS)' == 'Windows_NT'">win-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(OS)' != 'Windows_NT'">linux-x64</RuntimeIdentifier>
     <PublishTrimmed>false</PublishTrimmed>
     <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
     <DisableTransitiveFrameworkReferences>true</DisableTransitiveFrameworkReferences>

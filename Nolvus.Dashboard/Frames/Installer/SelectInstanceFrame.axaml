@@ -141,6 +141,26 @@
 							<TextBlock Text="Language only affects the base game, not the mods. Ensure Skyrim SE uses the same language in Steam."
 										Foreground="#CCCCCC"
 										TextWrapping="Wrap"/>
+                            <TextBlock Text="NKNOVA QUICK INSTALL"
+                                       Foreground="#F28F1A" FontWeight="Bold" />
+                            <TextBlock Text="Nolvus Awakening v6 Graphics Only: visuals + ENB, no gameplay overhaul. Select a preset, then install with one click. Requires configured Skyrim AE and Nexus/Nolvus logins."
+                                       Foreground="#CCCCCC" TextWrapping="Wrap" />
+                            <ComboBox x:Name="NknovaEnbPreset"
+                                      Background="#2E2E2E" Foreground="White"
+                                      BorderBrush="#F28F1A" MinWidth="200">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <Button x:Name="BtnQuickGraphics"
+                                    Content="Install Graphics Only + ENB"
+                                    Background="#F28F1A" Foreground="#111111"
+                                    BorderBrush="#F28F1A" FontWeight="Bold"
+                                    Padding="12,10" HorizontalAlignment="Stretch" />
+                            <TextBlock Text="Uses the official installer and archive. Existing instances are never overwritten. Non-Premium Nexus users still need to approve mod downloads."
+                                       Foreground="#CCCCCC" FontSize="11" TextWrapping="Wrap" />
 						</StackPanel>
 						<!-- BUTTONS AT BOTTOM RIGHT -->
 						<StackPanel Grid.Row="1"

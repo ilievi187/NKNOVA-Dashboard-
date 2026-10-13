@@ -28,7 +28,39 @@ MustFail(() => ManifestValidation.Check(missing), "unknown dependency");
 var digest = Manifest.Load(file);
 digest.Components[1].Sha256 = "not-a-sha";
 MustFail(() => ManifestValidation.Check(digest), "hash");
-Console.WriteLine("PASS: NKNOVA manifest validation, dependency sorting, read-only plan.");
+// All quick-install tests use a fake Steam folder inside an isolated temp directory.
+var sandbox = Path.Combine(Path.GetTempPath(), "nknova-go-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(sandbox);
+try
+{
+    var game = Path.Combine(sandbox, "Steam", "Skyrim");
+    var instancePath = Path.Combine(sandbox, "Instances", "Awakening");
+    var archivePath = Path.Combine(sandbox, "Archives");
+    Directory.CreateDirectory(game);
+    File.WriteAllText(Path.Combine(game, "SkyrimSE.exe"), "test fixture, not game data");
+    var quick = GraphicsOnlyInstallPlan.Create(game, instancePath, archivePath,
+        "CABBAGE", 2560, 1080, false, true);
+    Check(quick.AspectRatio == "21:9" && quick.EnbCode == "CABBAGE", "ultrawide ENB plan");
+    Check(GraphicsOnlyInstallPlan.Variant == "Graphics Only", "upstream graphics-only variant");
+    MustFailQuick(() => GraphicsOnlyInstallPlan.Create(game, instancePath, archivePath,
+        "UNTRUSTED", 1920, 1080, false, true), "unsupported ENB");
+    MustFailQuick(() => GraphicsOnlyInstallPlan.Create(game, instancePath, archivePath,
+        "CABBAGE", 1920, 1080, true, true), "existing registered instance");
+    MustFailQuick(() => GraphicsOnlyInstallPlan.Create(game, instancePath, archivePath,
+        "CABBAGE", 1920, 1080, false, false), "missing upstream variant");
+    MustFailQuick(() => GraphicsOnlyInstallPlan.Create(game, game, archivePath,
+        "CABBAGE", 1920, 1080, false, true), "game directory overlap");
+    Directory.CreateDirectory(instancePath);
+    File.WriteAllText(Path.Combine(instancePath, "saves.txt"), "preserve");
+    MustFailQuick(() => GraphicsOnlyInstallPlan.Create(game, instancePath, archivePath,
+        "CABBAGE", 1920, 1080, false, true), "nonempty instance");
+    Check(File.Exists(Path.Combine(instancePath, "saves.txt")), "no data erased");
+}
+finally
+{
+    Directory.Delete(sandbox, recursive: true);
+}
+Console.WriteLine("PASS: NKNOVA manifests, preflight, cross-platform Graphics Only + ENB safety.");
 return;
 
 static void Check(bool condition, string message)
@@ -40,4 +72,12 @@ static void MustFail(Action fn, string message)
     try { fn(); }
     catch (InvalidDataException) { return; }
     throw new Exception("Expected failure: " + message);
+}
+
+static void MustFailQuick(Action fn, string message)
+{
+    try { fn(); }
+    catch (InvalidOperationException) { return; }
+    catch (ArgumentException) { return; }
+    throw new Exception("Expected quick-install validation to block: " + message);
 }

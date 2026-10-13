@@ -147,7 +147,9 @@ namespace Nolvus.Dashboard.Frames
                     var window = TopLevel.GetTopLevel(this) as DashboardWindow;
                     window?.SetAccountImageVisible(true);
                     await CheckNolvus();
-                    await CheckForUpdates();
+                    // NKNOVA is a fork. Never run the upstream Linux-only auto-updater,
+                    // which could overwrite this Windows/Linux build with another project.
+                    // Fork-specific signed updates will be handled in a later release.
                     await CheckNexus();
 
                     var InstancesCheck = await CheckInstances();

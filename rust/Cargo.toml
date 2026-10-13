@@ -1,5 +1,5 @@
 [workspace]
-members = ["nknova-core", "nknova-app"]
+members = ["nknova-core", "nknova-app", "nknova-cli"]
 resolver = "2"
 
 [workspace.package]

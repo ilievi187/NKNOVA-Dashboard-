@@ -258,12 +258,12 @@ impl App {
                 ).color(GOLD).strong());
             } else {
                 ui.label(RichText::new(
-                    "Graphics Only: safe path preflight available. Full native installation remains pending."
+                    "Graphics Only: read-only path and available disk capacity checks. Full native installation remains pending."
                 ).color(GRAY));
             }
             ui.horizontal_wrapped(|ui| {
                 if ui.add_enabled(!self.settings.variant.requires_full_backend(),
-                    egui::Button::new("VERIFY GAME & DIRECTORIES")
+                    egui::Button::new("VERIFY GAME, PATHS & DISK SPACE")
                         .fill(GOLD).min_size(egui::vec2(195.0, 39.0))).clicked() {
                     self.preflight();
                 }

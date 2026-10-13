@@ -85,10 +85,17 @@ impl App {
                             .corner_radius(8)
                             .inner_margin(egui::Margin::same(12))
                             .show(&mut cols[i], |ui| {
-                                if ui.button(RichText::new(format!(
-                                    "{} {}", if selected { "●" } else { "○" }, variant.label()
-                                )).size(18.0).color(if selected { GOLD } else { brand::TEXT }))
-                                    .clicked() {
+                                if ui.add(
+                                    egui::Button::new(RichText::new(format!(
+                                        "{}{}",
+                                        if selected { "SELECTED / " } else { "CHOOSE / " },
+                                        variant.label()
+                                    )).size(18.0).strong().color(
+                                        if selected { GOLD } else { brand::TEXT }
+                                    ))
+                                    .fill(Color32::TRANSPARENT)
+                                    .stroke(egui::Stroke::NONE)
+                                ).clicked() {
                                     self.settings.variant = variant;
                                     self.changed();
                                 }

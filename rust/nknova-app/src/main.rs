@@ -2,6 +2,7 @@ mod brand;
 
 use eframe::egui::{self, Align, Color32, RichText};
 use nknova_core::cache::{self, Audit, Progress};
+use nknova_core::nexus::{NexusV1, NxmApproval};
 use nknova_core::probe::{self, HostOs};
 use nknova_core::profiles::Profile;
 use nknova_core::{Enb, GraphicsOnlyPlan, Settings};
@@ -27,6 +28,12 @@ enum ArchiveEvent {
     Done(Result<usize, String>),
 }
 
+enum NexusEvent {
+    Progress(u64),
+    Account(Result<String, String>),
+    Done(Result<String, String>),
+}
+
 struct App {
     page: Page,
     settings: Settings,
@@ -38,6 +45,13 @@ struct App {
     archive_audit: Option<Audit>,
     archive_worker: Option<Receiver<ArchiveEvent>>,
     archive_progress: String,
+    nexus_mod_id: String,
+    nexus_file_id: String,
+    nexus_sha256: String,
+    nexus_nxm_key: String,
+    nexus_nxm_expiry: String,
+    nexus_worker: Option<Receiver<NexusEvent>>,
+    nexus_progress: String,
 }
 
 impl App {
@@ -50,7 +64,11 @@ impl App {
         Self { page: Page::Installer, settings, plan: None, status,
                error, history: vec!["NKNOVA Rust desktop initialized".to_owned()],
                archive_manifest: String::new(), archive_audit: None,
-               archive_worker: None, archive_progress: String::new() }
+               archive_worker: None, archive_progress: String::new(),
+               nexus_mod_id: String::new(), nexus_file_id: String::new(),
+               nexus_sha256: String::new(), nexus_nxm_key: String::new(),
+               nexus_nxm_expiry: String::new(), nexus_worker: None,
+               nexus_progress: String::new() }
     }
 
     fn report(&mut self, message: impl Into<String>, error: bool) {
@@ -330,6 +348,93 @@ impl App {
         });
     }
 
+    fn poll_nexus_worker(&mut self, ui: &mut egui::Ui) {
+        let events: Vec<_> = self.nexus_worker.as_ref().map(|rx|
+            rx.try_iter().collect()).unwrap_or_default();
+        let mut finished = false;
+        for event in events {
+            match event {
+                NexusEvent::Progress(bytes) =>
+                    self.nexus_progress = format!("TLS download + checksum: {bytes} bytes"),
+                NexusEvent::Account(result) => {
+                    finished = true;
+                    match result {
+                        Ok(message) => self.report(message, false),
+                        Err(error) => self.report(format!("Nexus authorization: {error}"), true),
+                    }
+                }
+                NexusEvent::Done(result) => {
+                    finished = true;
+                    match result {
+                        Ok(message) => self.report(message, false),
+                        Err(error) => self.report(format!("Nexus download blocked: {error}"), true),
+                    }
+                }
+            }
+        }
+        if finished { self.nexus_worker = None; }
+        else if self.nexus_worker.is_some() {
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
+        }
+    }
+
+    fn verify_nexus_account(&mut self) {
+        if self.nexus_worker.is_some() { return; }
+        let (tx, rx) = mpsc::channel();
+        self.nexus_worker = Some(rx);
+        self.nexus_progress = "Checking authorized Nexus account...".into();
+        std::thread::spawn(move || {
+            let status = NexusV1::from_environment().and_then(|client|
+                client.account().map(|account|
+                    format!("Nexus connected: {} / {}",
+                        account.name,
+                        if account.is_premium { "Premium" } else { "Free (NXM approval required)" })
+                ));
+            let _ = tx.send(NexusEvent::Account(status));
+        });
+    }
+
+    fn fetch_nexus_archive(&mut self) {
+        if self.nexus_worker.is_some() { return; }
+        let Ok(mod_id) = self.nexus_mod_id.trim().parse::<u64>() else {
+            self.report("Provide a valid Nexus mod ID.", true); return;
+        };
+        let Ok(file_id) = self.nexus_file_id.trim().parse::<u64>() else {
+            self.report("Provide a valid Nexus file ID.", true); return;
+        };
+        let sha = self.nexus_sha256.trim().to_owned();
+        if sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+            self.report("Provide a 64-character SHA-256 checksum before downloading.", true);
+            return;
+        }
+        let key = std::mem::take(&mut self.nexus_nxm_key);
+        let expiry = std::mem::take(&mut self.nexus_nxm_expiry);
+        let dir = PathBuf::from(self.settings.archive_directory.trim());
+        let (tx, rx) = mpsc::channel();
+        self.nexus_worker = Some(rx);
+        self.nexus_progress = "Resolving authorized Nexus download link...".into();
+        std::thread::spawn(move || {
+            let result = (|| -> Result<String, String> {
+                let client = NexusV1::from_environment()?;
+                let nxm = if key.is_empty() && expiry.is_empty() {
+                    None
+                } else {
+                    Some(NxmApproval { key: &key, expiry: &expiry })
+                };
+                let links = client.authorized_links(mod_id, file_id, nxm)?;
+                // Always choose the first authorized Nexus CDN option.
+                let link = links.first().ok_or("Nexus did not return an approved link")?;
+                let id = format!("nexus-{mod_id}-{file_id}");
+                let receipt = client.download_verified(link, &id, &sha, &dir, |bytes| {
+                    let _ = tx.send(NexusEvent::Progress(bytes));
+                })?;
+                Ok(format!("Nexus archive verified: {} bytes, SHA-256 {}. No Skyrim game files modified.",
+                    receipt.bytes, receipt.sha256))
+            })();
+            let _ = tx.send(NexusEvent::Done(result));
+        });
+    }
+
     fn downloads(&mut self, ui: &mut egui::Ui) {
         self.heading(ui, "THE ARCHIVE", "Real Rust SHA-256 verification and non-destructive staging.");
         Self::panel(ui, |ui| {
@@ -382,12 +487,46 @@ impl App {
         });
         ui.add_space(15.0);
         Self::panel(ui, |ui| {
-            brand::section_label(ui, "02", "NOLVUS / NEXUS CONNECTORS", "INTEGRATION PENDING");
-            ui.add_space(6.0);
-            ui.label(RichText::new("Authenticated automatic downloading is next").size(20.0).strong());
-            ui.label(RichText::new("Only files you already have permission to use can enter the cache. Nexus login, premium links, manual free-user approvals and upstream installer packages must be integrated before true one-click installs.")
-                .color(GRAY));
-            ui.label(RichText::new("This action stages *archives only*. It never extracts mods, updates plugins or edits Skyrim.")
+            brand::section_label(ui, "02", "NEXUS MODS", "AUTHORIZED / HTTPS ONLY");
+            ui.add_space(9.0);
+            ui.label(RichText::new("Nexus Mods account & approved downloads").size(20.0).strong());
+            ui.label(RichText::new("Supply your API key through NKNOVA_NEXUS_API_KEY in the app environment. The key is never stored in settings or sent to a CDN.")
+                .size(12.0).color(GRAY));
+            if ui.add_enabled(self.nexus_worker.is_none(),
+                egui::Button::new("CHECK NEXUS ACCOUNT").min_size(egui::vec2(195.0, 35.0)))
+                .clicked() { self.verify_nexus_account(); }
+            ui.add_space(8.0);
+            ui.columns(2, |cols| {
+                cols[0].label("MOD ID");
+                cols[0].text_edit_singleline(&mut self.nexus_mod_id);
+                cols[1].label("FILE ID");
+                cols[1].text_edit_singleline(&mut self.nexus_file_id);
+            });
+            ui.label(RichText::new("PINNED SHA-256  /  REQUIRED").monospace().size(11.0).color(CYAN));
+            ui.add(egui::TextEdit::singleline(&mut self.nexus_sha256)
+                .hint_text("64 hex characters")
+                .desired_width(f32::INFINITY));
+            ui.label(RichText::new("FREE ACCOUNT: NXM APPROVAL KEY + EXPIRY (OPTIONAL FOR PREMIUM)")
+                .monospace().size(10.0).color(GRAY));
+            ui.columns(2, |cols| {
+                cols[0].add(egui::TextEdit::singleline(&mut self.nexus_nxm_key)
+                    .password(true).hint_text("NXM approval key"));
+                cols[1].add(egui::TextEdit::singleline(&mut self.nexus_nxm_expiry)
+                    .hint_text("NXM expiry Unix seconds"));
+            });
+            let enable = self.nexus_worker.is_none() && self.archive_worker.is_none() &&
+                self.nexus_mod_id.parse::<u64>().is_ok() &&
+                self.nexus_file_id.parse::<u64>().is_ok() &&
+                self.nexus_sha256.trim().len() == 64;
+            if ui.add_enabled(enable,
+                egui::Button::new(RichText::new("DOWNLOAD VERIFIED NEXUS ARCHIVE")
+                    .strong().color(BACKGROUND)).fill(GOLD).min_size(egui::vec2(300.0, 42.0)))
+                .clicked() { self.fetch_nexus_archive(); }
+            if self.nexus_worker.is_some() {
+                ui.spinner();
+                ui.label(RichText::new(&self.nexus_progress).monospace().color(CYAN));
+            }
+            ui.label(RichText::new("Nexus permission and approved NXM action are required. No web scraping or premium bypass; downloaded files are hash-pinned and cached, NEVER installed into Skyrim automatically.")
                 .size(11.0).color(GOLD));
         });
         ui.add_space(14.0);
@@ -430,6 +569,7 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.poll_archive_worker(ui);
+        self.poll_nexus_worker(ui);
         let height = ui.available_height();
         ui.with_layout(egui::Layout::left_to_right(Align::Min), |ui| {
             ui.set_min_height(height);

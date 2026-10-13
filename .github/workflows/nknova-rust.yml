@@ -74,6 +74,22 @@ jobs:
               exit 1
             fi
             scrot target/preview/NKNOVA-Archive.png
+            kill "$app_pid" 2>/dev/null || true
+            wait "$app_pid" 2>/dev/null || true
+            unset NKNOVA_PREVIEW_PAGE
+            for step in enb resources; do
+              export NKNOVA_PREVIEW_STEP="$step"
+              ./target/release/nknova > "/tmp/nknova-${step}.log" 2>&1 &
+              app_pid=$!
+              sleep 7
+              if ! kill -0 "$app_pid" 2>/dev/null; then
+                cat "/tmp/nknova-${step}.log"
+                exit 1
+              fi
+              scrot "target/preview/NKNOVA-${step}.png"
+              kill "$app_pid" 2>/dev/null || true
+              wait "$app_pid" 2>/dev/null || true
+            done
           '
       - name: Upload visual preview
         if: runner.os == 'Linux'

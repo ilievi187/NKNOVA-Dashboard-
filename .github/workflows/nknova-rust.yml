@@ -41,6 +41,34 @@ jobs:
         run: cargo test --workspace
       - name: Native release build
         run: cargo build --release -p nknova
+      - name: Capture headless native NightKnight UI preview
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y xvfb scrot libgl1-mesa-dri libxkbcommon-x11-0
+          mkdir -p target/preview
+          xvfb-run -a -s '-screen 0 1366x960x24' bash -c '
+            export WINIT_UNIX_BACKEND=x11
+            export LIBGL_ALWAYS_SOFTWARE=1
+            ./target/release/nknova > /tmp/nknova-ui-preview.log 2>&1 &
+            app_pid=$!
+            trap "kill $app_pid 2>/dev/null || true" EXIT
+            sleep 8
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              cat /tmp/nknova-ui-preview.log
+              exit 1
+            fi
+            scrot target/preview/NKNOVA-NightKnight.png
+          '
+      - name: Upload visual preview
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: NKNOVA-NightKnight-UI-Preview
+          path: rust/target/preview/NKNOVA-NightKnight.png
+          if-no-files-found: warn
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:

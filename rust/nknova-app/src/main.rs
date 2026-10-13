@@ -1,17 +1,19 @@
+mod brand;
+
 use eframe::egui::{self, Align, Color32, RichText};
 use nknova_core::probe::{self, HostOs};
 use nknova_core::profiles::Profile;
 use nknova_core::{Enb, GraphicsOnlyPlan, Settings};
 use std::process::Command;
 
-const BACKGROUND: Color32 = Color32::from_rgb(14, 18, 26);
-const PANEL: Color32 = Color32::from_rgb(28, 34, 47);
-const NAV: Color32 = Color32::from_rgb(20, 25, 35);
-const GOLD: Color32 = Color32::from_rgb(248, 183, 75);
-const CYAN: Color32 = Color32::from_rgb(88, 200, 211);
-const GRAY: Color32 = Color32::from_rgb(156, 170, 189);
-const GREEN: Color32 = Color32::from_rgb(107, 226, 166);
-const RED: Color32 = Color32::from_rgb(235, 108, 115);
+const BACKGROUND: Color32 = brand::NIGHT;
+const PANEL: Color32 = brand::SURFACE;
+const NAV: Color32 = brand::RAIL;
+const GOLD: Color32 = brand::YELLOW;
+const CYAN: Color32 = brand::BLUE;
+const GRAY: Color32 = brand::MUTED;
+const GREEN: Color32 = brand::GREEN;
+const RED: Color32 = brand::RED;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page { Installer, Profiles, Downloads, Settings }
@@ -27,13 +29,7 @@ struct App {
 
 impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        cc.egui_ctx.set_visuals(egui::Visuals::dark());
-        let mut style = (*cc.egui_ctx.style_of(egui::Theme::Dark)).clone();
-        style.spacing.item_spacing = egui::vec2(10.0, 10.0);
-        style.visuals.panel_fill = BACKGROUND;
-        style.visuals.widgets.inactive.bg_fill = PANEL;
-        style.visuals.widgets.hovered.bg_fill = Color32::from_rgb(53, 65, 84);
-        cc.egui_ctx.set_style_of(egui::Theme::Dark, style);
+        brand::apply(&cc.egui_ctx);
         let (settings, status, error) = match Settings::load() {
             Ok(s) => (s, "Ready — no game files changed".to_owned(), false),
             Err(e) => (Settings::default(), format!("Settings error: {e}"), true),
@@ -89,7 +85,8 @@ impl App {
     fn panel(ui: &mut egui::Ui, f: impl FnOnce(&mut egui::Ui)) {
         egui::Frame::new()
             .fill(PANEL)
-            .corner_radius(egui::CornerRadius::same(14))
+            .stroke(egui::Stroke::new(1.0, brand::OUTLINE))
+            .corner_radius(egui::CornerRadius::same(12))
             .inner_margin(egui::Margin::same(19))
             .show(ui, f);
     }
@@ -104,24 +101,30 @@ impl App {
     fn nav(&mut self, ui: &mut egui::Ui) {
         egui::Frame::new().fill(NAV).inner_margin(egui::Margin::same(18))
             .show(ui, |ui| {
-                ui.set_min_width(196.0);
+                // Frame inherits its caller's horizontal layout. Force the
+                // navigation widgets into a bounded vertical child layout.
+                ui.vertical(|ui| {
+                // A fixed rail width prevents the banner underline from consuming
+                // the entire eframe horizontal layout and clipping the main page.
+                ui.set_width(224.0);
                 ui.set_min_height(ui.available_height().max(630.0));
-                ui.label(RichText::new("◆ NKNOVA").size(27.0).strong().color(GOLD));
-                ui.label(RichText::new("RUST EDITION   /   ALPHA").size(10.0).color(GRAY));
-                ui.add_space(39.0);
+                brand::sidebar_brand(ui);
+                ui.add_space(31.0);
+                ui.label(RichText::new("MISSION CONTROL").monospace().size(10.0).color(CYAN));
+                ui.add_space(8.0);
                 for (tab, label) in [
-                    (Page::Installer, "◈   Install"),
-                    (Page::Profiles, "◫   Profiles"),
-                    (Page::Downloads, "↓   Downloads"),
-                    (Page::Settings, "⚙   Settings"),
+                    (Page::Installer, "01  /  DEPLOY"),
+                    (Page::Profiles, "02  /  MOD PROFILES"),
+                    (Page::Downloads, "03  /  ARCHIVES"),
+                    (Page::Settings, "04  /  SYSTEM"),
                 ] {
                     let chosen = self.page == tab;
                     if ui.add(egui::Button::new(
                         RichText::new(label).size(15.0)
                             .color(if chosen { BACKGROUND } else { GRAY }))
                         .fill(if chosen { GOLD } else { NAV })
-                        .corner_radius(8.0)
-                        .min_size(egui::vec2(190.0, 42.0))
+                        .corner_radius(6.0)
+                        .min_size(egui::vec2(218.0, 42.0))
                     ).clicked() { self.page = tab; }
                     ui.add_space(5.0);
                 }
@@ -129,8 +132,9 @@ impl App {
                 ui.separator();
                 ui.label(RichText::new("HOST SYSTEM").size(11.0).color(GRAY));
                 ui.label(RichText::new(HostOs::current().label()).strong().color(CYAN));
-                ui.label(RichText::new("Native Rust UI").size(12.0).color(GRAY));
-                ui.label(RichText::new("Nolvus API port pending").size(11.0).color(GOLD));
+                ui.label(RichText::new("RUST NATIVE  //  ALPHA").monospace().size(11.0).color(GRAY));
+                ui.label(RichText::new("INSTALL ENGINE  /  IN PROGRESS").monospace().size(10.0).color(GOLD));
+                });
             });
     }
 
@@ -149,27 +153,24 @@ impl App {
     }
 
     fn installer(&mut self, ui: &mut egui::Ui) {
-        self.heading(ui, "Build your Skyrim.", "One desktop experience. Windows + Linux.");
+        brand::hero(ui);
+        ui.add_space(10.0);
+        brand::channel_link(ui);
+        ui.add_space(16.0);
         Self::panel(ui, |ui| {
-            ui.label(RichText::new("01  /  GRAPHICS PROFILE").color(CYAN).strong());
+            brand::section_label(ui, "01", "GRAPHICS PROFILE", "NOLVUS AWAKENING  /  V6");
             ui.add_space(6.0);
-            ui.label(RichText::new("Nolvus Awakening — Graphics Only").size(24.0).strong());
-            ui.label(RichText::new("Official graphics-focused v6 variant, with required mods and ENB. No custom gameplay or AI additions.").color(GRAY));
+            ui.label(RichText::new("Choose your ENB atmosphere").size(23.0).strong().color(brand::TEXT));
+            ui.label(RichText::new("Official Graphics Only variant. Separate installation, no extra gameplay or AI mods.").color(GRAY));
             ui.add_space(13.0);
-            ui.label(RichText::new("SELECT ENB").size(11.0).color(CYAN).strong());
-            let previous = self.settings.enb;
-            egui::ComboBox::from_id_salt("enb-picker").width(260.0)
-                .selected_text(self.settings.enb.label())
-                .show_ui(ui, |ui| {
-                    for enb in Enb::ALL {
-                        ui.selectable_value(&mut self.settings.enb, enb, enb.label());
-                    }
-                });
-            if self.settings.enb != previous { self.changed(); }
+            if brand::enb_selector(ui, &mut self.settings.enb) { self.changed(); }
+            ui.add_space(5.0);
+            ui.label(RichText::new(format!("PRESET LOCKED TO:  {}", self.settings.enb.code()))
+                .monospace().size(11.0).color(GOLD));
         });
         ui.add_space(16.0);
         Self::panel(ui, |ui| {
-            ui.label(RichText::new("02  /  INSTALL PATHS").color(CYAN).strong());
+            brand::section_label(ui, "02", "INSTALL TARGETS", "SAFE / READ-ONLY PREFLIGHT");
             ui.label(RichText::new("No existing instances will be removed, moved or overwritten.").color(GRAY));
             ui.add_space(14.0);
             if Self::path(ui, "STEAM SKYRIM DIRECTORY", "Must contain SkyrimSE.exe", &mut self.settings.game_directory) {
@@ -197,7 +198,7 @@ impl App {
         ui.add_space(17.0);
         ui.horizontal(|ui| {
             if ui.add(egui::Button::new(RichText::new("✓  VERIFY INSTALL PLAN").strong().color(BACKGROUND))
-                .fill(GOLD).corner_radius(8.0).min_size(egui::vec2(215.0, 42.0))
+                .fill(GOLD).corner_radius(5.0).min_size(egui::vec2(215.0, 44.0))
             ).clicked() { self.preflight(); }
             if ui.button("Save preferences").clicked() {
                 match self.settings.save() {
@@ -215,18 +216,18 @@ impl App {
         if ui.add_enabled(self.plan.is_some() && !self.settings.legacy_dashboard.is_empty(),
             egui::Button::new("Open existing Nolvus installer →").min_size(egui::vec2(260.0, 40.0)))
             .clicked() { self.open_existing_installer(); }
-        ui.label(RichText::new("Rust one-click downloader is not available yet. This preview launches the existing official installer only when you explicitly choose it in Settings.").size(11.0).color(GOLD));
+        ui.label(RichText::new("ALPHA NOTICE  /  Native one-click downloading is not implemented. The optional handoff opens the existing installer only when explicitly configured.").monospace().size(10.0).color(GOLD));
         ui.add_space(14.0);
         self.activity(ui);
     }
 
     fn profiles(&mut self, ui: &mut egui::Ui) {
-        self.heading(ui, "Profiles.", "Separate ENB, Community Shaders, NKNOVA and AI packs.");
+        self.heading(ui, "MOD PROFILES", "Nolvus, graphics engines and the future NKNOVA expansion.");
         for profile in Profile::ALL {
             Self::panel(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
-                        ui.label(RichText::new(profile.label()).strong().size(21.0));
+                        ui.label(RichText::new(profile.label()).strong().size(21.0).color(brand::TEXT));
                         ui.label(RichText::new(match profile {
                             Profile::NolvusGraphicsEnb => "Official Nolvus graphics focused variant",
                             Profile::CommunityShaders => "Future graphics profile without ENB conflicts",
@@ -244,7 +245,7 @@ impl App {
     }
 
     fn downloads(&mut self, ui: &mut egui::Ui) {
-        self.heading(ui, "Downloads.", "Verified packages and resumable downloads are next.");
+        self.heading(ui, "THE ARCHIVE", "Local mod cache, protected downloads and integrity checks.");
         Self::panel(ui, |ui| {
             ui.label(RichText::new("ARCHIVE DIRECTORY").color(CYAN).strong());
             ui.label(if self.settings.archive_directory.is_empty() {
@@ -259,7 +260,7 @@ impl App {
     }
 
     fn settings_page(&mut self, ui: &mut egui::Ui) {
-        self.heading(ui, "Settings.", "A temporary, explicit bridge to your existing installer.");
+        self.heading(ui, "SYSTEM SETTINGS", "Platform, directories and temporary migration bridge.");
         Self::panel(ui, |ui| {
             ui.label(RichText::new(format!("{}  /  Rust native desktop", HostOs::current().label())).color(CYAN));
             ui.add_space(14.0);
@@ -281,7 +282,7 @@ impl App {
 
     fn activity(&self, ui: &mut egui::Ui) {
         Self::panel(ui, |ui| {
-            ui.label(RichText::new("ACTIVITY LOG").color(CYAN).strong());
+            brand::section_label(ui, "SYS", "OPERATION LOG", "NKNOVA / RUST");
             egui::ScrollArea::vertical().max_height(122.0).show(ui, |ui| {
                 for message in self.history.iter().rev().take(8) {
                     ui.label(RichText::new(format!("› {message}")).color(GRAY).size(12.0));
@@ -294,7 +295,7 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let height = ui.available_height();
-        ui.horizontal(|ui| {
+        ui.with_layout(egui::Layout::left_to_right(Align::Min), |ui| {
             ui.set_min_height(height);
             self.nav(ui);
             ui.add_space(16.0);
@@ -320,11 +321,11 @@ impl eframe::App for App {
 
 fn main() -> eframe::Result {
     eframe::run_native(
-        "NKNOVA Rust Dashboard",
+        "NKNOVA // NIGHTKNIGHT MOD LAB",
         eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
-                .with_inner_size([1160.0, 890.0])
-                .with_min_inner_size([960.0, 660.0]),
+                .with_inner_size([1260.0, 920.0])
+                .with_min_inner_size([1060.0, 680.0]),
             ..Default::default()
         },
         Box::new(|cc| Ok(Box::new(App::new(cc)))),

@@ -151,7 +151,7 @@ pub fn stage_authorized_reader<R: Read>(
     mut progress: impl FnMut(u64),
 ) -> Result<Receipt, String> {
     if component.is_empty() || !component.bytes()
-        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-' | b'.')) {
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-')) {
         return Err("Invalid component ID".into());
     }
     if expected_sha256.len() != 64 ||

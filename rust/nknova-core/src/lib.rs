@@ -2,6 +2,7 @@
 //! No GUI dependency; no code here launches games, deletes mods, or downloads archives.
 //! Currently implements a safe graphics-only Nolvus plan; native API adapters follow.
 
+pub mod cache;
 pub mod manifest;
 pub mod probe;
 pub mod profiles;

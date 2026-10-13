@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Vcc.Nolvus.Api.Installer.Services;
 using Nolvus.Core.Enums;
+using Nolvus.Core.Misc;
 using Nolvus.Dashboard.Core;
 using Nolvus.Components.Controls;
 using Avalonia.Media.Imaging;
@@ -22,6 +23,7 @@ using SixLabors.ImageSharp;
 using Avalonia.Threading;
 using Nolvus.Dashboard.Controls;
 using Nolvus.Dashboard.Frames.Instance;
+using Nolvus.Dashboard.Frames;
 using Avalonia.Interactivity;
 
 namespace Nolvus.Dashboard.Frames.Installer
@@ -34,6 +36,7 @@ namespace Nolvus.Dashboard.Frames.Installer
             InitializeComponent();
 
             BtnContinue.Click += BtnContinue_Click;
+            BtnQuickGraphics.Click += BtnQuickGraphics_Click;
             BtnCancel.Click += BtnCancel_Click;
             NolvusListBox.SelectionChanged += NolvusListBox_SelectionChanged;
         }
@@ -131,6 +134,8 @@ namespace Nolvus.Dashboard.Frames.Installer
                 BtnCancel.IsVisible = !Parameters.IsEmpty && Parameters["Cancel"] != null;
 
                 LoadLanguages();
+                NknovaEnbPreset.ItemsSource = ENBs.GetAvailableENBsForV6();
+                NknovaEnbPreset.SelectedIndex = 0;
 
                 await LoadAvailableLists(await ApiManager.Service.Installer.GetNolvusVersions());
 
@@ -183,6 +188,89 @@ namespace Nolvus.Dashboard.Frames.Installer
             }
 
             Continue();
+        }
+
+        // One click starts the SAME upstream package pipeline as the normal
+        // wizard. Never use a second downloader, touch a running instance or
+        // silently fall back to the much larger full-gameplay variant.
+        private async void BtnQuickGraphics_Click(object? sender, RoutedEventArgs e)
+        {
+            var owner = TopLevel.GetTopLevel(this) as Window;
+            if (owner is null) return;
+            BtnQuickGraphics.IsEnabled = false;
+            try
+            {
+                var available = await ApiManager.Service.Installer.GetNolvusVersions();
+                var version = available.FirstOrDefault(v => v.Name == Strings.NolvusAwakening);
+                if (version is null)
+                    throw new InvalidOperationException("Awakening v6 is not offered by Nolvus.");
+                if (version.Maintenance)
+                    throw new InvalidOperationException("Nolvus is under maintenance: " + version.MaintenanceReason);
+
+                var variants = await ApiManager.Service.Installer.GetNolvusVariants();
+                var graphicsOnlyPublished = variants.Any(v =>
+                    string.Equals(v.Name, Strings.GO, StringComparison.Ordinal));
+                var enb = NknovaEnbPreset.SelectedItem as ENBs;
+                if (enb is null)
+                    throw new InvalidOperationException("Select an ENB preset.");
+
+                // Construct a fresh instance; do not mutate the current selection
+                // until every read-only validation and disclaimer succeeds.
+                var instance = new NolvusInstance(version);
+                var screen = owner.Screens.Primary;
+                int width = screen?.Bounds.Width ?? 1920;
+                int height = screen?.Bounds.Height ?? 1080;
+                var plan = NKNOVA.Installer.Core.GraphicsOnlyInstallPlan.Create(
+                    ServiceSingleton.Folders.GameDirectory,
+                    instance.InstallDir,
+                    instance.ArchiveDir,
+                    enb.Code, width, height,
+                    ServiceSingleton.Instances.InstanceExists(version.Name),
+                    graphicsOnlyPublished);
+
+                if (version.IsBeta)
+                {
+                    var accepted = await NolvusMessageBox.ShowConfirmation(owner,
+                        "Nolvus v6 beta disclaimer",
+                        "Awakening is marked beta by Nolvus. It may be unstable. Continue with Graphics Only + ENB?");
+                    if (accepted != true) return;
+                }
+
+                instance.InstallDir = plan.InstallDirectory;
+                instance.ArchiveDir = plan.ArchiveDirectory;
+                instance.StockGame = Path.Combine(plan.InstallDirectory, "STOCK GAME");
+                instance.Performance.Variant = Strings.GO;
+                instance.Performance.AntiAliasing = "TAA";
+                instance.Performance.IniSettings = "1";
+                instance.Performance.LODs = "Performance";
+                instance.Performance.SREX = "FALSE";
+                instance.Performance.DownScaling = "FALSE";
+                instance.Performance.FrameGeneration = "FALSE";
+                instance.Settings.Width = plan.ResolutionWidth;
+                instance.Settings.Height = plan.ResolutionHeight;
+                instance.Settings.Ratio = plan.AspectRatio;
+                instance.Settings.EnableArchiving = true;
+                instance.Options.AlternateENB = plan.EnbCode;
+                if (DrpDwnLg.SelectedItem is LgCode language)
+                {
+                    instance.Settings.LgCode = language.Code;
+                    instance.Settings.LgName = language.Name;
+                }
+
+                ServiceSingleton.Instances.WorkingInstance = instance;
+                ServiceSingleton.Logger.Log("NKNOVA Graphics Only quick installation: " +
+                    plan.InstallDirectory + " | " + plan.EnbCode);
+                await ServiceSingleton.Dashboard.LoadFrameAsync<PackageFrame>();
+            }
+            catch (Exception ex)
+            {
+                await NolvusMessageBox.Show(owner, "NKNOVA Quick Install blocked",
+                    ex.Message + "\n\nNo existing installation was changed.", MessageBoxType.Error);
+            }
+            finally
+            {
+                BtnQuickGraphics.IsEnabled = true;
+            }
         }
 
         private void Continue()

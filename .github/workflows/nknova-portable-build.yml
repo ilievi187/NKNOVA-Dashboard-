@@ -1,0 +1,39 @@
+name: NKNOVA Portable Builds
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'Nolvus.Dashboard/**'
+      - 'NKNOVA.Installer.Core/**'
+      - '.github/workflows/nknova-portable-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            rid: linux-x64
+            name: NKNOVA-linux-x64
+          - runner: windows-latest
+            rid: win-x64
+            name: NKNOVA-windows-x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Publish dashboard
+        run: dotnet publish Nolvus.Dashboard/Nolvus.Dashboard.csproj --configuration Release --runtime ${{ matrix.rid }} --self-contained true --output "dist/${{ matrix.rid }}" -p:PublishTrimmed=false -p:PublishSingleFile=false
+      - name: Upload portable build (beta / unverified live installer)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/${{ matrix.rid }}/
+          if-no-files-found: error

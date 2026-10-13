@@ -4,8 +4,10 @@ on:
     branches:
       - main
       - 'develop/**'
+      - 'feature/**'
     paths:
       - 'NKNOVA.Installer.Core/**'
+      - 'Nolvus.Dashboard/**'
       - 'NKNOVA.Installer.Cli/**'
       - 'NKNOVA.Installer.Tests/**'
       - 'install-profiles/**'
@@ -19,7 +21,10 @@ on:
       - '.github/workflows/nknova-installation.yml'
 jobs:
   preflight:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
     steps:
@@ -31,7 +36,10 @@ jobs:
         run: dotnet build NKNOVA.Installer.Cli/NKNOVA.Installer.Cli.csproj -c Release
       - name: Validate manifests, cycles and traversal defenses
         run: dotnet run --project NKNOVA.Installer.Tests/NKNOVA.Installer.Tests.csproj -c Release
+      - name: Compile Avalonia Dashboard
+        run: dotnet build Nolvus.Dashboard/Nolvus.Dashboard.csproj -c Release
       - name: Missing external packages must block preflight
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           set +e

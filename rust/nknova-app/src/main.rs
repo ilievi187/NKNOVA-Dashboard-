@@ -181,7 +181,7 @@ impl App {
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
                 ui.label(RichText::new("NKNOVA  /  NATIVE").size(11.0).strong().color(CYAN));
-                ui.label(RichText::new(title).size(29.0).strong());
+                ui.label(RichText::new(title).size(29.0).strong().color(brand::TEXT));
                 ui.label(RichText::new(subtitle).color(GRAY));
             });
             ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
@@ -495,7 +495,7 @@ impl App {
         Self::panel(ui, |ui| {
             brand::section_label(ui, "02", "NEXUS MODS", "AUTHORIZED / HTTPS ONLY");
             ui.add_space(9.0);
-            ui.label(RichText::new("Nexus Mods account & approved downloads").size(20.0).strong());
+            ui.label(RichText::new("Nexus Mods account & approved downloads").size(20.0).strong().color(brand::TEXT));
             ui.label(RichText::new("Supply your API key through NKNOVA_NEXUS_API_KEY in the app environment. The key is never stored in settings or sent to a CDN.")
                 .size(12.0).color(GRAY));
             if ui.add_enabled(self.nexus_worker.is_none(),

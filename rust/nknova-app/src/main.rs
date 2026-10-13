@@ -1,4 +1,6 @@
 mod brand;
+mod gallery;
+mod wizard_ui;
 
 use eframe::egui::{self, Align, Color32, RichText};
 use nknova_core::cache::{self, Audit, Progress};
@@ -36,6 +38,8 @@ enum NexusEvent {
 
 struct App {
     page: Page,
+    wizard_step: wizard_ui::WizardStep,
+    gallery: gallery::Gallery,
     settings: Settings,
     plan: Option<GraphicsOnlyPlan>,
     status: String,
@@ -67,7 +71,15 @@ impl App {
         } else {
             Page::Installer
         };
-        Self { page: initial_page, settings, plan: None, status,
+        let preview_step = match std::env::var("NKNOVA_PREVIEW_STEP").as_deref() {
+            Ok("enb") => wizard_ui::WizardStep::Visuals,
+            Ok("paths") => wizard_ui::WizardStep::Paths,
+            Ok("resources") => wizard_ui::WizardStep::Resources,
+            Ok("review") => wizard_ui::WizardStep::Review,
+            _ => wizard_ui::WizardStep::Edition,
+        };
+        Self { page: initial_page, wizard_step: preview_step,
+               gallery: gallery::Gallery::default(), settings, plan: None, status,
                error, history: vec!["NKNOVA Rust desktop initialized".to_owned()],
                archive_manifest: String::new(), archive_audit: None,
                archive_worker: None, archive_progress: String::new(),
@@ -113,7 +125,7 @@ impl App {
                 let mut command = Command::new(&binary);
                 if let Some(dir) = binary.parent() { command.current_dir(dir); }
                 match command.spawn() {
-                    Ok(_) => self.report("Existing Nolvus Dashboard opened. Choose Graphics Only + ENB there and finish the official wizard. Native installation engine is not yet ported.", false),
+                    Ok(_) => self.report("Legacy Nolvus Dashboard opened. Confirm edition, ENB and SR Exterior Cities in its wizard: Rust selections are not automatically transferred.", false),
                     Err(e) => self.report(format!("Launch failed: {e}"), true),
                 }
             }
@@ -189,75 +201,6 @@ impl App {
             });
         });
         ui.add_space(20.0);
-    }
-
-    fn installer(&mut self, ui: &mut egui::Ui) {
-        brand::hero(ui);
-        ui.add_space(10.0);
-        brand::channel_link(ui);
-        ui.add_space(16.0);
-        Self::panel(ui, |ui| {
-            brand::section_label(ui, "01", "GRAPHICS PROFILE", "NOLVUS AWAKENING  /  V6");
-            ui.add_space(6.0);
-            ui.label(RichText::new("Choose your ENB atmosphere").size(23.0).strong().color(brand::TEXT));
-            ui.label(RichText::new("Official Graphics Only variant. Separate installation, no extra gameplay or AI mods.").color(GRAY));
-            ui.add_space(13.0);
-            if brand::enb_selector(ui, &mut self.settings.enb) { self.changed(); }
-            ui.add_space(5.0);
-            ui.label(RichText::new(format!("PRESET LOCKED TO:  {}", self.settings.enb.code()))
-                .monospace().size(11.0).color(GOLD));
-        });
-        ui.add_space(16.0);
-        Self::panel(ui, |ui| {
-            brand::section_label(ui, "02", "INSTALL TARGETS", "SAFE / READ-ONLY PREFLIGHT");
-            ui.label(RichText::new("No existing instances will be removed, moved or overwritten.").color(GRAY));
-            ui.add_space(14.0);
-            if Self::path(ui, "STEAM SKYRIM DIRECTORY", "Must contain SkyrimSE.exe", &mut self.settings.game_directory) {
-                self.changed();
-            }
-            if ui.small_button("Detect Steam Skyrim").clicked() {
-                match probe::steam_skyrim_candidates().into_iter().next() {
-                    Some(game) => {
-                        self.settings.game_directory = game.to_string_lossy().into_owned();
-                        self.changed();
-                        self.report("Found Skyrim in Steam manifest 489830", false);
-                    }
-                    None => self.report("Skyrim not found in default Steam libraries; select it manually.", true),
-                }
-            }
-            ui.add_space(6.0);
-            if Self::path(ui, "NEW NOLVUS TARGET", "Empty dedicated folder (not your current installation)", &mut self.settings.instance_directory) {
-                self.changed();
-            }
-            ui.add_space(6.0);
-            if Self::path(ui, "DOWNLOAD ARCHIVES", "Existing separate folder (safe to reuse existing downloads)", &mut self.settings.archive_directory) {
-                self.changed();
-            }
-        });
-        ui.add_space(17.0);
-        ui.horizontal(|ui| {
-            if ui.add(egui::Button::new(RichText::new("✓  VERIFY INSTALL PLAN").strong().color(BACKGROUND))
-                .fill(GOLD).corner_radius(5.0).min_size(egui::vec2(215.0, 44.0))
-            ).clicked() { self.preflight(); }
-            if ui.button("Save preferences").clicked() {
-                match self.settings.save() {
-                    Ok(()) => self.report("Settings saved to user configuration.", false),
-                    Err(e) => self.report(format!("Cannot save settings: {e}"), true),
-                }
-            }
-        });
-        ui.add_space(6.0);
-        if self.plan.is_some() {
-            ui.label(RichText::new("✓ Safe plan validated").color(GREEN));
-        } else {
-            ui.label(RichText::new("Preflight not passed").color(GRAY));
-        }
-        if ui.add_enabled(self.plan.is_some() && !self.settings.legacy_dashboard.is_empty(),
-            egui::Button::new("Open existing Nolvus installer →").min_size(egui::vec2(260.0, 40.0)))
-            .clicked() { self.open_existing_installer(); }
-        ui.label(RichText::new("ALPHA NOTICE  /  Native one-click downloading is not implemented. The optional handoff opens the existing installer only when explicitly configured.").monospace().size(10.0).color(GOLD));
-        ui.add_space(14.0);
-        self.activity(ui);
     }
 
     fn profiles(&mut self, ui: &mut egui::Ui) {
@@ -416,6 +359,7 @@ impl App {
         let key = std::mem::take(&mut self.nexus_nxm_key);
         let expiry = std::mem::take(&mut self.nexus_nxm_expiry);
         let dir = PathBuf::from(self.settings.archive_directory.trim());
+        let max_mib_s = self.settings.limits.max_download_mib_s;
         let (tx, rx) = mpsc::channel();
         self.nexus_worker = Some(rx);
         self.nexus_progress = "Resolving authorized Nexus download link...".into();
@@ -431,7 +375,7 @@ impl App {
                 // Always choose the first authorized Nexus CDN option.
                 let link = links.first().ok_or("Nexus did not return an approved link")?;
                 let id = format!("nexus-{mod_id}-{file_id}");
-                let receipt = client.download_verified(link, &id, &sha, &dir, |bytes| {
+                let receipt = client.download_verified_with_limit(link, &id, &sha, &dir, max_mib_s, |bytes| {
                     let _ = tx.send(NexusEvent::Progress(bytes));
                 })?;
                 Ok(format!("Nexus archive verified: {} bytes, SHA-256 {}. No Skyrim game files modified.",

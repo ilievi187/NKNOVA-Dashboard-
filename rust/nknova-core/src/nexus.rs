@@ -10,8 +10,9 @@ use reqwest::redirect::Policy;
 use reqwest::Url;
 use serde::Deserialize;
 use std::net::IpAddr;
+use std::io::{self, Read};
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const API: &str = "https://api.nexusmods.com/v1/";
 const USER_AGENT: &str = "NKNOVA-Rust/0.1 (Nolvus Mod Installer; Windows/Linux)";
@@ -119,6 +120,20 @@ impl NexusV1 {
         link: &NexusFileLink, id: &str, sha256: &str, archives: &Path,
         progress: impl FnMut(u64),
     ) -> Result<Receipt, String> {
+        self.download_verified_with_limit(link, id, sha256, archives, 0, progress)
+    }
+
+    /// Cap is MiB/s, 0 means unlimited. Only this Nexus single-transfer
+    /// transport is rate-limited; no current concurrency scheduler exists.
+    pub fn download_verified_with_limit(
+        &self,
+        link: &NexusFileLink, id: &str, sha256: &str, archives: &Path,
+        max_mib_s: u32,
+        progress: impl FnMut(u64),
+    ) -> Result<Receipt, String> {
+        if max_mib_s > 10_000 {
+            return Err("Nexus download cap must be <= 10,000 MiB/s".into());
+        }
         if sha256.len() != 64 || !sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err("A pinned SHA-256 is required before contacting CDN".into());
         }
@@ -129,7 +144,10 @@ impl NexusV1 {
         if !response.status().is_success() {
             return Err(format!("Nexus CDN returned HTTP {}", response.status().as_u16()));
         }
-        cache::stage_authorized_reader(id, sha256, archives, &mut response, progress)
+        let bytes_per_second = if max_mib_s == 0 { None }
+            else { Some(max_mib_s as u64 * 1024 * 1024) };
+        let mut limited = RateLimited::new(&mut response, bytes_per_second);
+        cache::stage_authorized_reader(id, sha256, archives, &mut limited, progress)
     }
 
     fn get_json<T: serde::de::DeserializeOwned>(
@@ -144,6 +162,37 @@ impl NexusV1 {
                 response.status().as_u16()));
         }
         response.json().map_err(|_| "Nexus returned unexpected JSON".to_owned())
+    }
+}
+
+
+/// Enforces an aggregate average read-rate limit on one authorized HTTP
+/// response. Does not write anything or change thread/CPU priorities.
+struct RateLimited<R> {
+    reader: R,
+    rate: Option<u64>,
+    start: Instant,
+    transferred: u64,
+}
+
+impl<R: Read> RateLimited<R> {
+    fn new(reader: R, rate: Option<u64>) -> Self {
+        Self { reader, rate, start: Instant::now(), transferred: 0 }
+    }
+}
+
+impl<R: Read> Read for RateLimited<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = self.reader.read(buf)?;
+        self.transferred = self.transferred.saturating_add(n as u64);
+        if let Some(rate) = self.rate.filter(|r| *r > 0) {
+            let expected = Duration::from_secs_f64(self.transferred as f64 / rate as f64);
+            let elapsed = self.start.elapsed();
+            if expected > elapsed {
+                std::thread::sleep(expected - elapsed);
+            }
+        }
+        Ok(n)
     }
 }
 

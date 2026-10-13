@@ -7,6 +7,9 @@ pub mod nexus;
 pub mod manifest;
 pub mod probe;
 pub mod profiles;
+pub mod wizard;
+
+pub use wizard::{InstallVariant, ResourceLimits};
 
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -54,6 +57,9 @@ pub struct Settings {
     pub archive_directory: String,
     pub legacy_dashboard: String,
     pub enb: Enb,
+    pub variant: InstallVariant,
+    pub sr_exterior_cities: bool,
+    pub limits: ResourceLimits,
 }
 
 impl Settings {
@@ -68,6 +74,7 @@ impl Settings {
     }
 
     pub fn save(&self) -> Result<(), String> {
+        self.limits.validate()?;
         let path = settings_file()?;
         let parent = path.parent().ok_or("Missing configuration directory")?;
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -115,6 +122,12 @@ pub struct GraphicsOnlyPlan {
 impl GraphicsOnlyPlan {
     /// Read-only validation. Does not create files or modify an installed game.
     pub fn prepare(settings: &Settings) -> Result<Self, String> {
+        settings.limits.validate()?;
+        if settings.variant.requires_full_backend() {
+            return Err(format!(
+                "{} is visible and saved, but its native installer backend is not available yet. No installation was attempted.",
+                settings.variant.label()));
+        }
         let game = checked_absolute(&settings.game_directory, "Skyrim directory")?;
         let target = checked_absolute(&settings.instance_directory, "Install directory")?;
         let archive = checked_absolute(&settings.archive_directory, "Archive directory")?;
@@ -221,6 +234,7 @@ mod tests {
             archive_directory: archives.to_string_lossy().into_owned(),
             legacy_dashboard: String::new(),
             enb: Enb::Cabbage,
+            ..Settings::default()
         };
         (root, cfg)
     }
@@ -252,6 +266,20 @@ mod tests {
         assert!(GraphicsOnlyPlan::prepare(&cfg).is_err());
         cfg.instance_directory = format!("{}/../trap", dir.display());
         assert!(GraphicsOnlyPlan::prepare(&cfg).is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn wizard_settings_migrate_and_block_unimplemented_variants() {
+        let cfg: Settings = serde_json::from_str(r#"{"enb":"Cabbage"}"#).unwrap();
+        assert_eq!(cfg.variant, InstallVariant::GraphicsOnly);
+        assert!(cfg.limits.validate().is_ok());
+        let (dir, mut cfg) = fixture();
+        cfg.variant = InstallVariant::Ultimate;
+        let error = GraphicsOnlyPlan::prepare(&cfg).unwrap_err();
+        assert!(error.contains("not available"));
+        cfg.variant = InstallVariant::GraphicsOnly;
+        assert!(GraphicsOnlyPlan::prepare(&cfg).is_ok());
         fs::remove_dir_all(dir).unwrap();
     }
 

@@ -1,10 +1,15 @@
 mod brand;
 
 use eframe::egui::{self, Align, Color32, RichText};
+use nknova_core::cache::{self, Audit, Progress};
+use nknova_core::nexus::{NexusV1, NxmApproval};
 use nknova_core::probe::{self, HostOs};
 use nknova_core::profiles::Profile;
 use nknova_core::{Enb, GraphicsOnlyPlan, Settings};
+use std::path::PathBuf;
 use std::process::Command;
+use std::sync::mpsc::{self, Receiver};
+use std::time::Duration;
 
 const BACKGROUND: Color32 = brand::NIGHT;
 const PANEL: Color32 = brand::SURFACE;
@@ -18,6 +23,17 @@ const RED: Color32 = brand::RED;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page { Installer, Profiles, Downloads, Settings }
 
+enum ArchiveEvent {
+    Progress(Progress),
+    Done(Result<usize, String>),
+}
+
+enum NexusEvent {
+    Progress(u64),
+    Account(Result<String, String>),
+    Done(Result<String, String>),
+}
+
 struct App {
     page: Page,
     settings: Settings,
@@ -25,6 +41,17 @@ struct App {
     status: String,
     error: bool,
     history: Vec<String>,
+    archive_manifest: String,
+    archive_audit: Option<Audit>,
+    archive_worker: Option<Receiver<ArchiveEvent>>,
+    archive_progress: String,
+    nexus_mod_id: String,
+    nexus_file_id: String,
+    nexus_sha256: String,
+    nexus_nxm_key: String,
+    nexus_nxm_expiry: String,
+    nexus_worker: Option<Receiver<NexusEvent>>,
+    nexus_progress: String,
 }
 
 impl App {
@@ -34,8 +61,20 @@ impl App {
             Ok(s) => (s, "Ready — no game files changed".to_owned(), false),
             Err(e) => (Settings::default(), format!("Settings error: {e}"), true),
         };
-        Self { page: Page::Installer, settings, plan: None, status,
-               error, history: vec!["NKNOVA Rust desktop initialized".to_owned()] }
+        // CI can capture the archive workflow without mouse/keyboard injection.
+        let initial_page = if std::env::var("NKNOVA_PREVIEW_PAGE").as_deref() == Ok("archives") {
+            Page::Downloads
+        } else {
+            Page::Installer
+        };
+        Self { page: initial_page, settings, plan: None, status,
+               error, history: vec!["NKNOVA Rust desktop initialized".to_owned()],
+               archive_manifest: String::new(), archive_audit: None,
+               archive_worker: None, archive_progress: String::new(),
+               nexus_mod_id: String::new(), nexus_file_id: String::new(),
+               nexus_sha256: String::new(), nexus_nxm_key: String::new(),
+               nexus_nxm_expiry: String::new(), nexus_worker: None,
+               nexus_progress: String::new() }
     }
 
     fn report(&mut self, message: impl Into<String>, error: bool) {
@@ -142,7 +181,7 @@ impl App {
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
                 ui.label(RichText::new("NKNOVA  /  NATIVE").size(11.0).strong().color(CYAN));
-                ui.label(RichText::new(title).size(29.0).strong());
+                ui.label(RichText::new(title).size(29.0).strong().color(brand::TEXT));
                 ui.label(RichText::new(subtitle).color(GRAY));
             });
             ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
@@ -244,16 +283,257 @@ impl App {
         }
     }
 
+    fn poll_archive_worker(&mut self, ui: &mut egui::Ui) {
+        let events: Vec<_> = self.archive_worker.as_ref()
+            .map(|rx| rx.try_iter().collect()).unwrap_or_default();
+        let mut finished = false;
+        for event in events {
+            match event {
+                ArchiveEvent::Progress(Progress::Begin { id }) =>
+                    self.archive_progress = format!("Reading authorized archive: {id}"),
+                ArchiveEvent::Progress(Progress::Copied { id, bytes }) =>
+                    self.archive_progress = format!("SHA-256 + staging {id}: {bytes} bytes"),
+                ArchiveEvent::Progress(Progress::Verified { id, bytes }) =>
+                    self.archive_progress = format!("Verified {id}: {bytes} bytes"),
+                ArchiveEvent::Progress(Progress::Reused { id }) =>
+                    self.archive_progress = format!("Reused previously verified {id}"),
+                ArchiveEvent::Progress(Progress::SkippedUpstream { id }) =>
+                    self.archive_progress = format!("Upstream handled by original Nolvus: {id}"),
+                ArchiveEvent::Done(result) => {
+                    finished = true;
+                    match result {
+                        Ok(count) => self.report(format!("Archive staging complete: {count} verified objects. No Skyrim files changed."), false),
+                        Err(e) => self.report(format!("Archive staging blocked: {e}"), true),
+                    }
+                }
+            }
+        }
+        if finished { self.archive_worker = None; }
+        else if self.archive_worker.is_some() { ui.ctx().request_repaint_after(Duration::from_millis(100)); }
+    }
+
+    fn audit_archives(&mut self) {
+        let path = PathBuf::from(self.archive_manifest.trim());
+        let archives = PathBuf::from(self.settings.archive_directory.trim());
+        match cache::load_local_manifest(&path).and_then(|m| cache::audit(&m, &archives)) {
+            Ok(report) => {
+                self.report(format!("Manifest audit: {} total; {} pinned archives; {} missing hashes; {} missing files; {} upstream-only",
+                    report.total, report.pinned, report.missing_hashes.len(),
+                    report.missing_files.len(), report.upstream), false);
+                self.archive_audit = Some(report);
+            }
+            Err(e) => {
+                self.archive_audit = None;
+                self.report(format!("Cannot audit archive manifest: {e}"), true);
+            }
+        }
+    }
+
+    fn stage_archives(&mut self) {
+        if self.archive_worker.is_some() { return; }
+        let Some(report) = self.archive_audit.as_ref() else {
+            self.report("Run manifest audit before staging.", true);
+            return;
+        };
+        if !report.missing_hashes.is_empty() || !report.missing_files.is_empty() {
+            self.report("Add real SHA-256 pins and provide authorized archives before staging.", true);
+            return;
+        }
+        let path = PathBuf::from(self.archive_manifest.trim());
+        let dir = PathBuf::from(self.settings.archive_directory.trim());
+        let (tx, rx) = mpsc::channel();
+        self.archive_worker = Some(rx);
+        self.archive_progress = "Preparing verified content-addressed cache...".into();
+        std::thread::spawn(move || {
+            let result = cache::load_local_manifest(&path)
+                .and_then(|manifest| cache::stage_local(&manifest, &dir, |progress| {
+                    let _ = tx.send(ArchiveEvent::Progress(progress));
+                }))
+                .map(|receipts| receipts.len());
+            let _ = tx.send(ArchiveEvent::Done(result));
+        });
+    }
+
+    fn poll_nexus_worker(&mut self, ui: &mut egui::Ui) {
+        let events: Vec<_> = self.nexus_worker.as_ref().map(|rx|
+            rx.try_iter().collect()).unwrap_or_default();
+        let mut finished = false;
+        for event in events {
+            match event {
+                NexusEvent::Progress(bytes) =>
+                    self.nexus_progress = format!("TLS download + checksum: {bytes} bytes"),
+                NexusEvent::Account(result) => {
+                    finished = true;
+                    match result {
+                        Ok(message) => self.report(message, false),
+                        Err(error) => self.report(format!("Nexus authorization: {error}"), true),
+                    }
+                }
+                NexusEvent::Done(result) => {
+                    finished = true;
+                    match result {
+                        Ok(message) => self.report(message, false),
+                        Err(error) => self.report(format!("Nexus download blocked: {error}"), true),
+                    }
+                }
+            }
+        }
+        if finished { self.nexus_worker = None; }
+        else if self.nexus_worker.is_some() {
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
+        }
+    }
+
+    fn verify_nexus_account(&mut self) {
+        if self.nexus_worker.is_some() { return; }
+        let (tx, rx) = mpsc::channel();
+        self.nexus_worker = Some(rx);
+        self.nexus_progress = "Checking authorized Nexus account...".into();
+        std::thread::spawn(move || {
+            let status = NexusV1::from_environment().and_then(|client|
+                client.account().map(|account|
+                    format!("Nexus connected: {} / {}",
+                        account.name,
+                        if account.is_premium { "Premium" } else { "Free (NXM approval required)" })
+                ));
+            let _ = tx.send(NexusEvent::Account(status));
+        });
+    }
+
+    fn fetch_nexus_archive(&mut self) {
+        if self.nexus_worker.is_some() { return; }
+        let Ok(mod_id) = self.nexus_mod_id.trim().parse::<u64>() else {
+            self.report("Provide a valid Nexus mod ID.", true); return;
+        };
+        let Ok(file_id) = self.nexus_file_id.trim().parse::<u64>() else {
+            self.report("Provide a valid Nexus file ID.", true); return;
+        };
+        let sha = self.nexus_sha256.trim().to_owned();
+        if sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+            self.report("Provide a 64-character SHA-256 checksum before downloading.", true);
+            return;
+        }
+        let key = std::mem::take(&mut self.nexus_nxm_key);
+        let expiry = std::mem::take(&mut self.nexus_nxm_expiry);
+        let dir = PathBuf::from(self.settings.archive_directory.trim());
+        let (tx, rx) = mpsc::channel();
+        self.nexus_worker = Some(rx);
+        self.nexus_progress = "Resolving authorized Nexus download link...".into();
+        std::thread::spawn(move || {
+            let result = (|| -> Result<String, String> {
+                let client = NexusV1::from_environment()?;
+                let nxm = if key.is_empty() && expiry.is_empty() {
+                    None
+                } else {
+                    Some(NxmApproval { key: &key, expiry: &expiry })
+                };
+                let links = client.authorized_links(mod_id, file_id, nxm)?;
+                // Always choose the first authorized Nexus CDN option.
+                let link = links.first().ok_or("Nexus did not return an approved link")?;
+                let id = format!("nexus-{mod_id}-{file_id}");
+                let receipt = client.download_verified(link, &id, &sha, &dir, |bytes| {
+                    let _ = tx.send(NexusEvent::Progress(bytes));
+                })?;
+                Ok(format!("Nexus archive verified: {} bytes, SHA-256 {}. No Skyrim game files modified.",
+                    receipt.bytes, receipt.sha256))
+            })();
+            let _ = tx.send(NexusEvent::Done(result));
+        });
+    }
+
     fn downloads(&mut self, ui: &mut egui::Ui) {
-        self.heading(ui, "THE ARCHIVE", "Local mod cache, protected downloads and integrity checks.");
+        self.heading(ui, "THE ARCHIVE", "Real Rust SHA-256 verification and non-destructive staging.");
         Self::panel(ui, |ui| {
-            ui.label(RichText::new("ARCHIVE DIRECTORY").color(CYAN).strong());
+            brand::section_label(ui, "01", "AUTHORIZED ARCHIVES", "LOCAL / IMMUTABLE CACHE");
+            ui.add_space(9.0);
+            ui.label(RichText::new("Archive cache directory").color(brand::TEXT).strong());
             ui.label(if self.settings.archive_directory.is_empty() {
-                "Not configured"
+                "Not configured — set a separate existing archive folder under Installer."
             } else { &self.settings.archive_directory });
-            ui.add_space(15.0);
-            ui.label(RichText::new("Native download engine: not implemented").size(21.0).color(GOLD));
-            ui.label(RichText::new("Planned: Nexus authorization, SHA256, persistent journal, cancel/resume and rollback. Third-party Skyrim game data is never bundled.").color(GRAY));
+            ui.label(RichText::new("Verified objects are written only under .nknova-verified/. Original files and the Skyrim installation are never overwritten.")
+                .size(12.0).color(GRAY));
+            ui.add_space(11.0);
+            ui.label(RichText::new("MANIFEST JSON").monospace().color(CYAN).strong());
+            if ui.add(egui::TextEdit::singleline(&mut self.archive_manifest)
+                .hint_text("Absolute path to a manifest with pinned SHA-256 archives")
+                .desired_width(f32::INFINITY)).changed() {
+                self.archive_audit = None;
+            }
+            ui.horizontal(|ui| {
+                if ui.add_enabled(self.archive_worker.is_none(),
+                    egui::Button::new("01  /  AUDIT MANIFEST").fill(CYAN)
+                        .min_size(egui::vec2(168.0, 38.0))).clicked() {
+                    self.audit_archives();
+                }
+                let can_stage = self.archive_worker.is_none() &&
+                    self.archive_audit.as_ref().is_some_and(|a|
+                        a.missing_hashes.is_empty() && a.missing_files.is_empty() && a.pinned > 0);
+                if ui.add_enabled(can_stage,
+                    egui::Button::new(RichText::new("02  /  STAGE VERIFIED FILES").color(BACKGROUND).strong())
+                        .fill(GOLD).min_size(egui::vec2(220.0, 38.0))).clicked() {
+                    self.stage_archives();
+                }
+            });
+            if let Some(report) = &self.archive_audit {
+                ui.label(RichText::new(format!("MANIFEST: {} components  |  {} SHA-256 pins  |  {} upstream-only",
+                    report.total, report.pinned, report.upstream)).monospace().size(11.0).color(GREEN));
+                if !report.missing_hashes.is_empty() {
+                    ui.label(RichText::new(format!("BLOCKED — missing checksums: {}",
+                        report.missing_hashes.join(", "))).color(RED));
+                }
+                if !report.missing_files.is_empty() {
+                    ui.label(RichText::new(format!("BLOCKED — missing local files: {}",
+                        report.missing_files.join(", "))).color(RED));
+                }
+            }
+            if self.archive_worker.is_some() {
+                ui.spinner();
+                ui.label(RichText::new(&self.archive_progress).monospace().color(CYAN));
+            }
+        });
+        ui.add_space(15.0);
+        Self::panel(ui, |ui| {
+            brand::section_label(ui, "02", "NEXUS MODS", "AUTHORIZED / HTTPS ONLY");
+            ui.add_space(9.0);
+            ui.label(RichText::new("Nexus Mods account & approved downloads").size(20.0).strong().color(brand::TEXT));
+            ui.label(RichText::new("Supply your API key through NKNOVA_NEXUS_API_KEY in the app environment. The key is never stored in settings or sent to a CDN.")
+                .size(12.0).color(GRAY));
+            if ui.add_enabled(self.nexus_worker.is_none(),
+                egui::Button::new("CHECK NEXUS ACCOUNT").min_size(egui::vec2(195.0, 35.0)))
+                .clicked() { self.verify_nexus_account(); }
+            ui.add_space(8.0);
+            ui.columns(2, |cols| {
+                cols[0].label("MOD ID");
+                cols[0].text_edit_singleline(&mut self.nexus_mod_id);
+                cols[1].label("FILE ID");
+                cols[1].text_edit_singleline(&mut self.nexus_file_id);
+            });
+            ui.label(RichText::new("PINNED SHA-256  /  REQUIRED").monospace().size(11.0).color(CYAN));
+            ui.add(egui::TextEdit::singleline(&mut self.nexus_sha256)
+                .hint_text("64 hex characters")
+                .desired_width(f32::INFINITY));
+            ui.label(RichText::new("FREE ACCOUNT: NXM APPROVAL KEY + EXPIRY (OPTIONAL FOR PREMIUM)")
+                .monospace().size(10.0).color(GRAY));
+            ui.columns(2, |cols| {
+                cols[0].add(egui::TextEdit::singleline(&mut self.nexus_nxm_key)
+                    .password(true).hint_text("NXM approval key"));
+                cols[1].add(egui::TextEdit::singleline(&mut self.nexus_nxm_expiry)
+                    .hint_text("NXM expiry Unix seconds"));
+            });
+            let enable = self.nexus_worker.is_none() && self.archive_worker.is_none() &&
+                self.nexus_mod_id.parse::<u64>().is_ok() &&
+                self.nexus_file_id.parse::<u64>().is_ok() &&
+                self.nexus_sha256.trim().len() == 64;
+            if ui.add_enabled(enable,
+                egui::Button::new(RichText::new("DOWNLOAD VERIFIED NEXUS ARCHIVE")
+                    .strong().color(BACKGROUND)).fill(GOLD).min_size(egui::vec2(300.0, 42.0)))
+                .clicked() { self.fetch_nexus_archive(); }
+            if self.nexus_worker.is_some() {
+                ui.spinner();
+                ui.label(RichText::new(&self.nexus_progress).monospace().color(CYAN));
+            }
+            ui.label(RichText::new("Nexus permission and approved NXM action are required. No web scraping or premium bypass; downloaded files are hash-pinned and cached, NEVER installed into Skyrim automatically.")
+                .size(11.0).color(GOLD));
         });
         ui.add_space(14.0);
         self.activity(ui);
@@ -294,6 +574,8 @@ impl App {
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.poll_archive_worker(ui);
+        self.poll_nexus_worker(ui);
         let height = ui.available_height();
         ui.with_layout(egui::Layout::left_to_right(Align::Min), |ui| {
             ui.set_min_height(height);

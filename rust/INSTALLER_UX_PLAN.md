@@ -11,11 +11,15 @@ The actual Nolvus install orchestrator remains a separate backend milestone.
    Optional **SR Exterior Cities** toggle changes the requested future plan,
    not installer behavior yet. Do not combine Graphics Only with Redux/Ultra.
    These controls work without Skyrim installed.
-2. **Visuals:** ENB selector, description, four user-owned per-scene screenshot
-   slots and direct links to the verified corresponding **author gallery**
-   (not a generic fantasy stock photo). Artwork cards are labeled stylized.
-   Local approved captures for *day, forest, night, interior* can render at
-   native pixel quality when present.
+2. **Visuals:** ENB selector, description, **four real original Nolvus v6
+   bundled ENB preview screenshots**, scene-specific optional local screenshot
+   slots and direct links to the corresponding verified **author gallery**.
+   The original upstream `Nolvus.Dashboard/Frames/Installer/v6/ENBFrame.axaml.cs`
+   maps each of the four original assets to its specific ENB. NKNOVA embeds
+   those already-present repository assets into the portable Rust executable;
+   no external Nexus imagery is scraped or copied. The stylized miniature cards
+   are separately identified as illustrations. Local captures for *day,
+   forest, night, interior* override the default photo when supplied.
 3. **Paths:** Choose game path, new empty install target and independent
    archive cache. Skyrim discovery is optional until final preflight.
 4. **Resources:** Show real Nexus single-transfer MiB/s throttle
@@ -29,9 +33,18 @@ The actual Nolvus install orchestrator remains a separate backend milestone.
 
 ## ENB image provenance and slots
 
-Bundling arbitrary Nexus author images would require the authors' permission.
-This branch **does not redistribute** their images; it links directly to
-verified original gallery pages:
+The four screenshots already included in the upstream Nolvus Dashboard
+source are reused in this fork and correctly matched by its original v6
+ENBFrame mapping (these are **the real preset-specific default previews**):
+
+- `Nolvus.Dashboard/Assets/Cabbage_ENB_01.jpg` -> Cabbage
+- `Nolvus.Dashboard/Assets/Kauz-ENB.jpg` -> Kauz
+- `Nolvus.Dashboard/Assets/PiCho-ENB.jpg` -> PI-CHO
+- `Nolvus.Dashboard/Assets/Amon-ENB.jpg` -> Amon
+
+No *new* third-party images are redistributed from Nexus. Bundling arbitrary
+new author photos would require permission; the gallery links instead point to
+the verified original pages:
 
 | ENB | Original creator | Author screenshot gallery |
 |---|---|---|

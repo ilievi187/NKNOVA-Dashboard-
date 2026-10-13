@@ -20,9 +20,11 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             executable: nknova
+            cli_executable: nknova-cli
           - os: windows-latest
             platform: windows
             executable: nknova.exe
+            cli_executable: nknova-cli.exe
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -74,4 +76,10 @@ jobs:
         with:
           name: NKNOVA-Rust-${{ matrix.platform }}
           path: rust/target/release/${{ matrix.executable }}
+          if-no-files-found: error
+      - name: Upload headless CLI
+        uses: actions/upload-artifact@v4
+        with:
+          name: NKNOVA-Rust-CLI-${{ matrix.platform }}
+          path: rust/target/release/${{ matrix.cli_executable }}
           if-no-files-found: error

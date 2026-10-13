@@ -46,6 +46,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\NKNOVA.Installer.Core\NKNOVA.Installer.Core.csproj" />
     <ProjectReference Include="..\Nolvus.Core\Nolvus.Core.csproj" />
     <ProjectReference Include="..\Nolvus.Services\Nolvus.Services.csproj" />
     <ProjectReference Include="..\Nolvus.Api.Library.Installer\Nolvus.Api.Installer.csproj" />

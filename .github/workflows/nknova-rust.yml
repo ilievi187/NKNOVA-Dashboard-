@@ -47,7 +47,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get install -y xvfb scrot libgl1-mesa-dri
+          sudo apt-get install -y xvfb scrot libgl1-mesa-dri libxkbcommon-x11-0
           mkdir -p target/preview
           xvfb-run -a -s '-screen 0 1366x960x24' bash -c '
             export WINIT_UNIX_BACKEND=x11

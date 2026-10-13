@@ -141,6 +141,78 @@ where
     Ok(receipts)
 }
 
+/// Accept only an authorized HTTPS provider stream whose full content SHA-256
+/// has been independently pinned. Never invent URLs or bypass account rights.
+pub fn stage_authorized_reader<R: Read>(
+    component: &str,
+    expected_sha256: &str,
+    archives: &Path,
+    reader: &mut R,
+    mut progress: impl FnMut(u64),
+) -> Result<Receipt, String> {
+    if component.is_empty() || !component.bytes()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-' | b'.')) {
+        return Err("Invalid component ID".into());
+    }
+    if expected_sha256.len() != 64 ||
+        !expected_sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("Downloads require an exact SHA-256 pin".into());
+    }
+    validate_archives(archives)?;
+    let root = archives.join(CACHE_FOLDER);
+    create_cache_root(&root)?;
+    let expected = expected_sha256.to_ascii_lowercase();
+    let destination = root.join(format!("{expected}.archive"));
+    if destination.exists() {
+        let (actual, bytes) = hash_file(&destination)?;
+        if actual != expected {
+            return Err("Existing immutable cache file has wrong hash".into());
+        }
+        return Ok(Receipt {
+            id: component.into(), sha256: expected, bytes, path: destination,
+        });
+    }
+
+    // A reader can come from a signed Nexus CDN response, a unit-test Cursor,
+    // or another authorized source. Only verified bytes become cache objects.
+    let sequence = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+    let temp = root.join(format!(".partial.{}.{}", std::process::id(), sequence));
+    let mut file = OpenOptions::new().create_new(true).write(true).open(&temp)
+        .map_err(|e| format!("Cannot create exclusive cache staging file: {e}"))?;
+    let result = (|| -> Result<u64, String> {
+        let mut hash = Sha256::new();
+        let mut count = 0u64;
+        let mut buffer = [0u8; BUF];
+        loop {
+            let n = reader.read(&mut buffer).map_err(|e| e.to_string())?;
+            if n == 0 { break; }
+            file.write_all(&buffer[..n]).map_err(|e| e.to_string())?;
+            hash.update(&buffer[..n]);
+            count += n as u64;
+            progress(count);
+        }
+        file.sync_all().map_err(|e| e.to_string())?;
+        if format!("{:x}", hash.finalize()) != expected {
+            return Err("Downloaded bytes failed mandatory SHA-256 verification".into());
+        }
+        match fs::hard_link(&temp, &destination) {
+            Ok(()) => {}
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                if hash_file(&destination)?.0 != expected {
+                    return Err("Concurrent immutable cache object has wrong checksum".into());
+                }
+            }
+            Err(e) => return Err(format!("Cannot publish verified downloaded archive: {e}")),
+        }
+        Ok(count)
+    })();
+    drop(file);
+    let _ = fs::remove_file(&temp);
+    let bytes = result?;
+    write_journal(&root, component, &expected, bytes)?;
+    Ok(Receipt { id: component.to_owned(), sha256: expected, bytes, path: destination })
+}
+
 fn validate_archives(archives: &Path) -> Result<(), String> {
     if !archives.is_absolute() ||
         archives.components().any(|c| matches!(c, PathComponent::ParentDir | PathComponent::CurDir))
@@ -327,6 +399,18 @@ mod tests {
         fs::write(root.join(format!("{hash}.archive")), b"bad").unwrap();
         assert!(stage_local(&manifest, &dir, |_| {}).is_err());
         assert_eq!(fs::read(root.join(format!("{hash}.archive"))).unwrap(), b"bad");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn remote_reader_can_publish_only_hash_matched_bytes() {
+        let (dir, _) = fixture(b"untouched local archive");
+        let remote = b"authorized signed-CDN bytes";
+        let pin = format!("{:x}", Sha256::digest(remote));
+        let receipt = stage_authorized_reader("approved-mod", &pin, &dir, &mut &remote[..], |_| {}).unwrap();
+        assert_eq!(fs::read(&receipt.path).unwrap(), remote);
+        assert!(stage_authorized_reader("approved-mod", &"f".repeat(64), &dir, &mut &remote[..], |_| {}).is_err());
+        assert!(stage_authorized_reader("approved-mod", "", &dir, &mut &remote[..], |_| {}).is_err());
         fs::remove_dir_all(dir).unwrap();
     }
 

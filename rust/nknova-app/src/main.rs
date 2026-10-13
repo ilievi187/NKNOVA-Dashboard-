@@ -106,9 +106,24 @@ impl App {
     fn preflight(&mut self) {
         match GraphicsOnlyPlan::prepare(&self.settings) {
             Ok(plan) => {
-                self.report(format!("PASS: Nolvus v6 {} + {}, destination: {}",
-                    plan.variant, plan.enb.label(), plan.target.display()), false);
-                self.plan = Some(plan);
+                match nknova_core::capacity::inspect(&plan.target, &plan.archive, self.settings.variant) {
+                    Ok(space) if space.sufficient => {
+                        self.report(format!(
+                            "PASS: Nolvus v6 {} + {}; directory and disk checks passed. {}",
+                            plan.variant, plan.enb.label(), space.summary()), false);
+                        self.plan = Some(plan);
+                    }
+                    Ok(space) => {
+                        self.plan = None;
+                        self.report(format!(
+                            "BLOCKED: Insufficient free space for the selected v6 edition. {}",
+                            space.summary()), true);
+                    }
+                    Err(message) => {
+                        self.plan = None;
+                        self.report(format!("BLOCKED: Cannot verify available disk capacity: {message}"), true);
+                    }
+                }
             }
             Err(message) => { self.plan = None; self.report(format!("BLOCKED: {message}"), true); }
         }
@@ -119,6 +134,23 @@ impl App {
             self.plan = None;
             self.report(format!("BLOCKED: {e}"), true);
             return;
+        }
+        match nknova_core::capacity::inspect(
+            &self.plan.as_ref().map(|p| &p.target).cloned().unwrap_or_default(),
+            &self.plan.as_ref().map(|p| &p.archive).cloned().unwrap_or_default(),
+            self.settings.variant,
+        ) {
+            Ok(space) if space.sufficient => {}
+            Ok(space) => {
+                self.plan = None;
+                self.report(format!("BLOCKED: Space changed since preflight. {}", space.summary()), true);
+                return;
+            }
+            Err(e) => {
+                self.plan = None;
+                self.report(format!("BLOCKED: Cannot recheck disk capacity: {e}"), true);
+                return;
+            }
         }
         match nknova_core::check_legacy_dashboard(&self.settings.legacy_dashboard) {
             Ok(binary) => {

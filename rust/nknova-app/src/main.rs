@@ -28,12 +28,12 @@ struct App {
 impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         cc.egui_ctx.set_visuals(egui::Visuals::dark());
-        let mut style = (*cc.egui_ctx.style()).clone();
+        let mut style = (*cc.egui_ctx.style_of(egui::Theme::Dark)).clone();
         style.spacing.item_spacing = egui::vec2(10.0, 10.0);
         style.visuals.panel_fill = BACKGROUND;
         style.visuals.widgets.inactive.bg_fill = PANEL;
         style.visuals.widgets.hovered.bg_fill = Color32::from_rgb(53, 65, 84);
-        cc.egui_ctx.set_style(style);
+        cc.egui_ctx.set_style_of(egui::Theme::Dark, style);
         let (settings, status, error) = match Settings::load() {
             Ok(s) => (s, "Ready — no game files changed".to_owned(), false),
             Err(e) => (Settings::default(), format!("Settings error: {e}"), true),

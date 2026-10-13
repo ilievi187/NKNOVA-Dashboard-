@@ -3,6 +3,7 @@
 //! Currently implements a safe graphics-only Nolvus plan; native API adapters follow.
 
 pub mod cache;
+pub mod nexus;
 pub mod manifest;
 pub mod probe;
 pub mod profiles;

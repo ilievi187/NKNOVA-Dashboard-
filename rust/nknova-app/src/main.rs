@@ -101,6 +101,9 @@ impl App {
     fn nav(&mut self, ui: &mut egui::Ui) {
         egui::Frame::new().fill(NAV).inner_margin(egui::Margin::same(18))
             .show(ui, |ui| {
+                // Frame inherits its caller's horizontal layout. Force the
+                // navigation widgets into a bounded vertical child layout.
+                ui.vertical(|ui| {
                 // A fixed rail width prevents the banner underline from consuming
                 // the entire eframe horizontal layout and clipping the main page.
                 ui.set_width(224.0);
@@ -131,6 +134,7 @@ impl App {
                 ui.label(RichText::new(HostOs::current().label()).strong().color(CYAN));
                 ui.label(RichText::new("RUST NATIVE  //  ALPHA").monospace().size(11.0).color(GRAY));
                 ui.label(RichText::new("INSTALL ENGINE  /  IN PROGRESS").monospace().size(10.0).color(GOLD));
+                });
             });
     }
 

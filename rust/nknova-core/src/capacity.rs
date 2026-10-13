@@ -56,12 +56,7 @@ pub fn inspect(target: &Path, archive: &Path, variant: InstallVariant) -> Result
     let installed = installed as u64;
     let downloaded = downloaded as u64;
     // Compare integer bytes rather than rounded-down GB figures.
-    let sufficient = if same_volume {
-        instance_free >= (installed + downloaded + HEADROOM_GB) * GB
-    } else {
-        instance_free >= (installed + HEADROOM_GB) * GB
-            && archive_free >= (downloaded + HEADROOM_GB) * GB
-    };
+    let sufficient = fits_capacity(instance_free, archive_free, installed, downloaded, same_volume);
     Ok(SpaceReport {
         variant,
         instance_required_gb: installed,
@@ -71,6 +66,15 @@ pub fn inspect(target: &Path, archive: &Path, variant: InstallVariant) -> Result
         same_volume,
         sufficient,
     })
+}
+
+fn fits_capacity(instance_free: u64, archive_free: u64, installed_gb: u64, archive_gb: u64, same_volume: bool) -> bool {
+    if same_volume {
+        instance_free >= (installed_gb + archive_gb + HEADROOM_GB) * GB
+    } else {
+        instance_free >= (installed_gb + HEADROOM_GB) * GB
+            && archive_free >= (archive_gb + HEADROOM_GB) * GB
+    }
 }
 
 fn existing_directory_ancestor(path: &Path) -> Result<PathBuf, String> {
@@ -153,6 +157,10 @@ mod tests {
             instance_free_gb: 300, archive_free_gb: 300,
             same_volume: true, sufficient: false
         };
-        assert!(model.summary().contains("350 GB")); // 235 + 105 + 10
+        assert!(model.summary().contains("235 GB install + ~105 GB archives + 10 GB reserve"));
+        assert!(!fits_capacity(340 * GB, 340 * GB, 235, 105, true));
+        assert!(fits_capacity(350 * GB, 350 * GB, 235, 105, true));
+        assert!(fits_capacity(245 * GB, 115 * GB, 235, 105, false));
+        assert!(!fits_capacity(245 * GB, 114 * GB, 235, 105, false));
     }
 }

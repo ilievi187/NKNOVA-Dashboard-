@@ -71,7 +71,14 @@ impl App {
         } else {
             Page::Installer
         };
-        Self { page: initial_page, wizard_step: wizard_ui::WizardStep::Edition,
+        let preview_step = match std::env::var("NKNOVA_PREVIEW_STEP").as_deref() {
+            Ok("enb") => wizard_ui::WizardStep::Visuals,
+            Ok("paths") => wizard_ui::WizardStep::Paths,
+            Ok("resources") => wizard_ui::WizardStep::Resources,
+            Ok("review") => wizard_ui::WizardStep::Review,
+            _ => wizard_ui::WizardStep::Edition,
+        };
+        Self { page: initial_page, wizard_step: preview_step,
                gallery: gallery::Gallery::default(), settings, plan: None, status,
                error, history: vec!["NKNOVA Rust desktop initialized".to_owned()],
                archive_manifest: String::new(), archive_audit: None,

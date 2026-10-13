@@ -63,13 +63,24 @@ jobs:
               exit 1
             fi
             scrot target/preview/NKNOVA-NightKnight.png
+            kill "$app_pid" 2>/dev/null || true
+            wait "$app_pid" 2>/dev/null || true
+            export NKNOVA_PREVIEW_PAGE=archives
+            ./target/release/nknova > /tmp/nknova-archive-preview.log 2>&1 &
+            app_pid=$!
+            sleep 7
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              cat /tmp/nknova-archive-preview.log
+              exit 1
+            fi
+            scrot target/preview/NKNOVA-Archive.png
           '
       - name: Upload visual preview
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: NKNOVA-NightKnight-UI-Preview
-          path: rust/target/preview/NKNOVA-NightKnight.png
+          path: rust/target/preview/*.png
           if-no-files-found: warn
       - name: Upload executable
         uses: actions/upload-artifact@v4

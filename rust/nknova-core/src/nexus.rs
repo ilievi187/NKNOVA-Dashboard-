@@ -143,7 +143,7 @@ impl NexusV1 {
             return Err(format!("Nexus API returned HTTP {} (check account, download permissions and rate limits)",
                 response.status().as_u16()));
         }
-        response.json().map_err(|_| "Nexus returned unexpected JSON")
+        response.json().map_err(|_| "Nexus returned unexpected JSON".to_owned())
     }
 }
 

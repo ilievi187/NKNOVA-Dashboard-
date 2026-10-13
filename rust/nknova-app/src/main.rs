@@ -1,10 +1,14 @@
 mod brand;
 
 use eframe::egui::{self, Align, Color32, RichText};
+use nknova_core::cache::{self, Audit, Progress};
 use nknova_core::probe::{self, HostOs};
 use nknova_core::profiles::Profile;
 use nknova_core::{Enb, GraphicsOnlyPlan, Settings};
+use std::path::PathBuf;
 use std::process::Command;
+use std::sync::mpsc::{self, Receiver};
+use std::time::Duration;
 
 const BACKGROUND: Color32 = brand::NIGHT;
 const PANEL: Color32 = brand::SURFACE;
@@ -18,6 +22,11 @@ const RED: Color32 = brand::RED;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page { Installer, Profiles, Downloads, Settings }
 
+enum ArchiveEvent {
+    Progress(Progress),
+    Done(Result<usize, String>),
+}
+
 struct App {
     page: Page,
     settings: Settings,
@@ -25,6 +34,10 @@ struct App {
     status: String,
     error: bool,
     history: Vec<String>,
+    archive_manifest: String,
+    archive_audit: Option<Audit>,
+    archive_worker: Option<Receiver<ArchiveEvent>>,
+    archive_progress: String,
 }
 
 impl App {
@@ -35,7 +48,9 @@ impl App {
             Err(e) => (Settings::default(), format!("Settings error: {e}"), true),
         };
         Self { page: Page::Installer, settings, plan: None, status,
-               error, history: vec!["NKNOVA Rust desktop initialized".to_owned()] }
+               error, history: vec!["NKNOVA Rust desktop initialized".to_owned()],
+               archive_manifest: String::new(), archive_audit: None,
+               archive_worker: None, archive_progress: String::new() }
     }
 
     fn report(&mut self, message: impl Into<String>, error: bool) {
@@ -244,16 +259,136 @@ impl App {
         }
     }
 
+    fn poll_archive_worker(&mut self, ui: &mut egui::Ui) {
+        let events: Vec<_> = self.archive_worker.as_ref()
+            .map(|rx| rx.try_iter().collect()).unwrap_or_default();
+        let mut finished = false;
+        for event in events {
+            match event {
+                ArchiveEvent::Progress(Progress::Begin { id }) =>
+                    self.archive_progress = format!("Reading authorized archive: {id}"),
+                ArchiveEvent::Progress(Progress::Copied { id, bytes }) =>
+                    self.archive_progress = format!("SHA-256 + staging {id}: {bytes} bytes"),
+                ArchiveEvent::Progress(Progress::Verified { id, bytes }) =>
+                    self.archive_progress = format!("Verified {id}: {bytes} bytes"),
+                ArchiveEvent::Progress(Progress::Reused { id }) =>
+                    self.archive_progress = format!("Reused previously verified {id}"),
+                ArchiveEvent::Progress(Progress::SkippedUpstream { id }) =>
+                    self.archive_progress = format!("Upstream handled by original Nolvus: {id}"),
+                ArchiveEvent::Done(result) => {
+                    finished = true;
+                    match result {
+                        Ok(count) => self.report(format!("Archive staging complete: {count} verified objects. No Skyrim files changed."), false),
+                        Err(e) => self.report(format!("Archive staging blocked: {e}"), true),
+                    }
+                }
+            }
+        }
+        if finished { self.archive_worker = None; }
+        else if self.archive_worker.is_some() { ui.ctx().request_repaint_after(Duration::from_millis(100)); }
+    }
+
+    fn audit_archives(&mut self) {
+        let path = PathBuf::from(self.archive_manifest.trim());
+        let archives = PathBuf::from(self.settings.archive_directory.trim());
+        match cache::load_local_manifest(&path).and_then(|m| cache::audit(&m, &archives)) {
+            Ok(report) => {
+                self.report(format!("Manifest audit: {} total; {} pinned archives; {} missing hashes; {} missing files; {} upstream-only",
+                    report.total, report.pinned, report.missing_hashes.len(),
+                    report.missing_files.len(), report.upstream), false);
+                self.archive_audit = Some(report);
+            }
+            Err(e) => {
+                self.archive_audit = None;
+                self.report(format!("Cannot audit archive manifest: {e}"), true);
+            }
+        }
+    }
+
+    fn stage_archives(&mut self) {
+        if self.archive_worker.is_some() { return; }
+        let Some(report) = self.archive_audit.as_ref() else {
+            self.report("Run manifest audit before staging.", true);
+            return;
+        };
+        if !report.missing_hashes.is_empty() || !report.missing_files.is_empty() {
+            self.report("Add real SHA-256 pins and provide authorized archives before staging.", true);
+            return;
+        }
+        let path = PathBuf::from(self.archive_manifest.trim());
+        let dir = PathBuf::from(self.settings.archive_directory.trim());
+        let (tx, rx) = mpsc::channel();
+        self.archive_worker = Some(rx);
+        self.archive_progress = "Preparing verified content-addressed cache...".into();
+        std::thread::spawn(move || {
+            let result = cache::load_local_manifest(&path)
+                .and_then(|manifest| cache::stage_local(&manifest, &dir, |progress| {
+                    let _ = tx.send(ArchiveEvent::Progress(progress));
+                }))
+                .map(|receipts| receipts.len());
+            let _ = tx.send(ArchiveEvent::Done(result));
+        });
+    }
+
     fn downloads(&mut self, ui: &mut egui::Ui) {
-        self.heading(ui, "THE ARCHIVE", "Local mod cache, protected downloads and integrity checks.");
+        self.heading(ui, "THE ARCHIVE", "Real Rust SHA-256 verification and non-destructive staging.");
         Self::panel(ui, |ui| {
-            ui.label(RichText::new("ARCHIVE DIRECTORY").color(CYAN).strong());
+            brand::section_label(ui, "01", "AUTHORIZED ARCHIVES", "LOCAL / IMMUTABLE CACHE");
+            ui.add_space(9.0);
+            ui.label(RichText::new("Archive cache directory").color(brand::TEXT).strong());
             ui.label(if self.settings.archive_directory.is_empty() {
-                "Not configured"
+                "Not configured — set a separate existing archive folder under Installer."
             } else { &self.settings.archive_directory });
-            ui.add_space(15.0);
-            ui.label(RichText::new("Native download engine: not implemented").size(21.0).color(GOLD));
-            ui.label(RichText::new("Planned: Nexus authorization, SHA256, persistent journal, cancel/resume and rollback. Third-party Skyrim game data is never bundled.").color(GRAY));
+            ui.label(RichText::new("Verified objects are written only under .nknova-verified/. Original files and the Skyrim installation are never overwritten.")
+                .size(12.0).color(GRAY));
+            ui.add_space(11.0);
+            ui.label(RichText::new("MANIFEST JSON").monospace().color(CYAN).strong());
+            if ui.add(egui::TextEdit::singleline(&mut self.archive_manifest)
+                .hint_text("Absolute path to a manifest with pinned SHA-256 archives")
+                .desired_width(f32::INFINITY)).changed() {
+                self.archive_audit = None;
+            }
+            ui.horizontal(|ui| {
+                if ui.add_enabled(self.archive_worker.is_none(),
+                    egui::Button::new("01  /  AUDIT MANIFEST").fill(CYAN)
+                        .min_size(egui::vec2(168.0, 38.0))).clicked() {
+                    self.audit_archives();
+                }
+                let can_stage = self.archive_worker.is_none() &&
+                    self.archive_audit.as_ref().is_some_and(|a|
+                        a.missing_hashes.is_empty() && a.missing_files.is_empty() && a.pinned > 0);
+                if ui.add_enabled(can_stage,
+                    egui::Button::new(RichText::new("02  /  STAGE VERIFIED FILES").color(BACKGROUND).strong())
+                        .fill(GOLD).min_size(egui::vec2(220.0, 38.0))).clicked() {
+                    self.stage_archives();
+                }
+            });
+            if let Some(report) = &self.archive_audit {
+                ui.label(RichText::new(format!("MANIFEST: {} components  |  {} SHA-256 pins  |  {} upstream-only",
+                    report.total, report.pinned, report.upstream)).monospace().size(11.0).color(GREEN));
+                if !report.missing_hashes.is_empty() {
+                    ui.label(RichText::new(format!("BLOCKED — missing checksums: {}",
+                        report.missing_hashes.join(", "))).color(RED));
+                }
+                if !report.missing_files.is_empty() {
+                    ui.label(RichText::new(format!("BLOCKED — missing local files: {}",
+                        report.missing_files.join(", "))).color(RED));
+                }
+            }
+            if self.archive_worker.is_some() {
+                ui.spinner();
+                ui.label(RichText::new(&self.archive_progress).monospace().color(CYAN));
+            }
+        });
+        ui.add_space(15.0);
+        Self::panel(ui, |ui| {
+            brand::section_label(ui, "02", "NOLVUS / NEXUS CONNECTORS", "INTEGRATION PENDING");
+            ui.add_space(6.0);
+            ui.label(RichText::new("Authenticated automatic downloading is next").size(20.0).strong());
+            ui.label(RichText::new("Only files you already have permission to use can enter the cache. Nexus login, premium links, manual free-user approvals and upstream installer packages must be integrated before true one-click installs.")
+                .color(GRAY));
+            ui.label(RichText::new("This action stages *archives only*. It never extracts mods, updates plugins or edits Skyrim.")
+                .size(11.0).color(GOLD));
         });
         ui.add_space(14.0);
         self.activity(ui);
@@ -294,6 +429,7 @@ impl App {
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.poll_archive_worker(ui);
         let height = ui.available_height();
         ui.with_layout(egui::Layout::left_to_right(Align::Min), |ui| {
             ui.set_min_height(height);

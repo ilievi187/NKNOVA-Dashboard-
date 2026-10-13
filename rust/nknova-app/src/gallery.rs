@@ -8,6 +8,17 @@ use nknova_core::{settings_file, Enb};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// Source mapping is explicitly confirmed by the existing
+/// Nolvus.Dashboard/Frames/Installer/v6/ENBFrame.axaml.cs.
+fn bundled_asset(enb: Enb) -> &'static [u8] {
+    match enb {
+        Enb::Cabbage => include_bytes!("../../../Nolvus.Dashboard/Assets/Cabbage_ENB_01.jpg"),
+        Enb::Kauz => include_bytes!("../../../Nolvus.Dashboard/Assets/Kauz-ENB.jpg"),
+        Enb::Picho => include_bytes!("../../../Nolvus.Dashboard/Assets/PiCho-ENB.jpg"),
+        Enb::Amon => include_bytes!("../../../Nolvus.Dashboard/Assets/Amon-ENB.jpg"),
+    }
+}
+
 pub const SCENES: [(&str, &str); 4] = [
     ("day", "Daylight / exterior"),
     ("forest", "Forest / vegetation"),
@@ -50,13 +61,14 @@ pub fn preview_root() -> Result<PathBuf, String> {
 pub struct Gallery {
     pub scene: usize,
     textures: HashMap<String, TextureHandle>,
+    bundled: HashMap<String, TextureHandle>,
     /// Avoid repeated decoding of absent or malformed paths.
     errors: HashMap<String, String>,
 }
 
 impl Default for Gallery {
     fn default() -> Self {
-        Self { scene: 0, textures: HashMap::new(), errors: HashMap::new() }
+        Self { scene: 0, textures: HashMap::new(), bundled: HashMap::new(), errors: HashMap::new() }
     }
 }
 
@@ -72,8 +84,27 @@ impl Gallery {
         self.textures.get(&key)
     }
 
+    /// The four original, accurately assigned v6 ENB sample screenshots
+    /// already shipped within this NolvusDashboard GPL fork. We reuse those
+    /// existing assets as compile-time resources rather than scraping Nexus.
+    fn bundled(&mut self, ctx: &egui::Context, enb: Enb) -> Option<&TextureHandle> {
+        let key = enb.code().to_owned();
+        if !self.bundled.contains_key(&key) {
+            let bytes = bundled_asset(enb);
+            let decoded = image::load_from_memory(bytes).ok()?.to_rgba8();
+            let dims = decoded.dimensions();
+            let image = egui::ColorImage::from_rgba_unmultiplied(
+                [dims.0 as usize, dims.1 as usize], decoded.as_raw());
+            let texture = ctx.load_texture(
+                format!("NKNOVA-UPSTREAM-{}", enb.code()), image, TextureOptions::LINEAR);
+            self.bundled.insert(key.clone(), texture);
+        }
+        self.bundled.get(&key)
+    }
+
     pub fn reload(&mut self) {
         self.textures.clear();
+        self.bundled.clear();
         self.errors.clear();
     }
 
@@ -88,15 +119,18 @@ impl Gallery {
         });
         let (scene, scene_title) = SCENES[self.scene];
         let has_local = self.load(ui.ctx(), enb, scene).cloned();
-        if let Some(texture) = has_local {
+        let texture = has_local.clone().or_else(|| self.bundled(ui.ctx(), enb).cloned());
+        if let Some(texture) = texture {
             // Scale down while preserving aspect ratio; never upscale a thumbnail.
             let size = texture.size_vec2();
             let width = size.x.min(ui.available_width()).min(665.0);
             let height = width * size.y / size.x;
             ui.image((texture.id(), Vec2::new(width, height)));
-            ui.label(RichText::new(format!(
-                "{scene_title}  •  User-supplied screenshot  •  {}", enb.label()
-            )).size(11.0).color(super::brand::MUTED));
+            ui.label(RichText::new(if has_local.is_some() {
+                format!("{scene_title} / User-supplied authorized capture / {}", enb.label())
+            } else {
+                format!("Original Nolvus Dashboard built-in ENB preview / {}", enb.label())
+            }).size(11.0).color(super::brand::MUTED));
         } else {
             let (rect, _) = ui.allocate_exact_size(
                 Vec2::new(ui.available_width().min(665.0).max(250.0), 90.0),
@@ -118,6 +152,9 @@ impl Gallery {
             ui.label(RichText::new(format!("Original gallery: {}", author(enb)))
                 .size(11.0).color(super::brand::MUTED));
         });
+        ui.label(RichText::new(
+            "Want matched day/night/forest/interior comparisons? Add your own scene-specific captures below; they override the built-in screenshot."
+        ).size(11.0).color(super::brand::MUTED));
         if let Ok(root) = preview_root() {
             ui.label(RichText::new(format!(
                 "Local user captures: {}/{}/{}.png or .jpg",
@@ -175,6 +212,16 @@ fn check_regular_file(path: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn original_dashboard_has_a_distinct_jpeg_per_enb() {
+        for preset in Enb::ALL {
+            let bytes = bundled_asset(preset);
+            assert!(bytes.len() > 16_000);
+            assert!(bytes.starts_with(&[0xff, 0xd8]));
+            assert!(image::load_from_memory(bytes).is_ok());
+        }
+    }
+
     #[test]
     fn author_links_are_distinct_and_are_actual_preset_galleries() {
         let links: std::collections::HashSet<_> = Enb::ALL.into_iter()

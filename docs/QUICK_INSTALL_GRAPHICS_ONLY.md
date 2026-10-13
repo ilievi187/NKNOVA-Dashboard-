@@ -50,6 +50,9 @@ dotnet build Nolvus.Dashboard/Nolvus.Dashboard.csproj -c Release
 
 The workflow `NKNOVA Installer Core` builds on Windows and Linux. The
 `NKNOVA Portable Builds` workflow produces per-platform build artifacts.
+Fork builds deliberately skip the upstream Linux auto-updater to prevent it
+from replacing NKNOVA. Download newer fork builds from this repository.
+
 Neither source compilation nor simulated tests are a live Skyrim/Proton
 integration test. **Do not treat the quick installer as production-proven**
 until it completes an authorized clean install on each OS.

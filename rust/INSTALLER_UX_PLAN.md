@@ -100,3 +100,21 @@ and hardware.
 
 Nolvus Awakening v6: https://www.nolvus.net/appendix/installer/requirements
 and https://www.nolvus.net/appendix/installer/install
+
+## New: read-only disk capacity check
+
+The Review step checks the **available disk space** on the selected target
+and archive volumes before reporting preflight success. It leaves **10 GB
+headroom** beyond the approximate official v6 space requirements.
+On the same volume, the installer adds estimated install + archive sizes
+rather than accepting two individually sufficient readings. On different
+volumes, it checks each capacity independently. On Linux this uses filesystem
+device IDs; on Windows it groups by volume prefix (drive/UNC share).
+Windows mapped-drive aliases remain an exception and are not a full
+substitute for a low-level volume identity check.
+
+This reports *current* free space only: it does **not** reserve capacity,
+does not estimate every temporary extraction step, and does not promise
+that a future full installation can finish. It never creates folders or
+writes game data. The legacy launch action rechecks the capacity to avoid
+using stale Review state.

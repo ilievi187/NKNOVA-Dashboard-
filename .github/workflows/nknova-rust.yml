@@ -1,0 +1,49 @@
+name: NKNOVA Rust Native
+
+on:
+  push:
+    branches: [main, 'feature/**']
+    paths: ['rust/**', '.github/workflows/nknova-rust.yml']
+  pull_request:
+    paths: ['rust/**', '.github/workflows/nknova-rust.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            executable: nknova
+          - os: windows-latest
+            platform: windows
+            executable: nknova.exe
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux UI libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+        working-directory: .
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Rust tests
+        run: cargo test --workspace
+      - name: Native release build
+        run: cargo build --release -p nknova
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: NKNOVA-Rust-${{ matrix.platform }}
+          path: rust/target/release/${{ matrix.executable }}
+          if-no-files-found: error

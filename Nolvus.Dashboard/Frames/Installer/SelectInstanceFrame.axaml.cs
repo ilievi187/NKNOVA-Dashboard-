@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Vcc.Nolvus.Api.Installer.Services;
 using Nolvus.Core.Enums;
+using Nolvus.Core.Misc;
 using Nolvus.Dashboard.Core;
 using Nolvus.Components.Controls;
 using Avalonia.Media.Imaging;

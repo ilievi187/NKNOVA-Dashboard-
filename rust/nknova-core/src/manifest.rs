@@ -151,7 +151,7 @@ fn valid_id(value: &str) -> bool {
 
 fn safe_filename(name: &str) -> bool {
     !name.is_empty() && name != "." && name != ".." &&
-    !name.contains(['/', '\\', ':']) &&
+    !name.chars().any(|c| matches!(c, '/' | '\\' | ':')) &&
     !name.chars().any(char::is_control)
 }
 

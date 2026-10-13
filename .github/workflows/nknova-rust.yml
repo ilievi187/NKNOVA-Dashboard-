@@ -40,7 +40,7 @@ jobs:
       - name: Rust tests
         run: cargo test --workspace
       - name: Native release build
-        run: cargo build --release -p nknova
+        run: cargo build --release -p nknova -p nknova-cli
       - name: Capture headless native NightKnight UI preview
         if: runner.os == 'Linux'
         continue-on-error: true

@@ -101,6 +101,27 @@ Source of API semantics: the repository's original
 `Nolvus.NexusApi/INexusAPI.cs` and `Nolvus.Package/Files/NexusModFile.cs`.
 The user must still comply with Nexus Mods API and download terms.
 
+
+## Headless CLI for agents and SSH (no GUI needed)
+
+```bash
+cd rust
+cargo build --release -p nknova-cli
+./target/release/nknova-cli audit /absolute/path/manifest.json /absolute/archive-folder
+./target/release/nknova-cli stage /absolute/path/manifest.json /absolute/archive-folder --commit-cache
+./target/release/nknova-cli nexus-account
+./target/release/nknova-cli nexus-download 12345 67890 ACTUAL_64_CHAR_SHA256 /absolute/archive-folder --commit-cache
+```
+
+The CLI has **no delete command** and requires explicit `--commit-cache` for writes.
+Authorized free-account NXM values may be set as temporary
+`NKNOVA_NXM_KEY` and `NKNOVA_NXM_EXPIRY` environment variables (never
+in CLI command arguments or GitHub source). The Nexus personal API key remains
+in the session-local `NKNOVA_NEXUS_API_KEY` environment variable.
+
+Portable executable assets are emitted as `NKNOVA-Rust-CLI-windows` and
+`NKNOVA-Rust-CLI-linux` alongside the NightKnight GUI artifacts.
+
 ## Tests
 
 Run `cargo test --workspace` in `rust/`. Tests use synthetic tiny local

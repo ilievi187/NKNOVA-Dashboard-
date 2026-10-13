@@ -101,7 +101,9 @@ impl App {
     fn nav(&mut self, ui: &mut egui::Ui) {
         egui::Frame::new().fill(NAV).inner_margin(egui::Margin::same(18))
             .show(ui, |ui| {
-                ui.set_min_width(224.0);
+                // A fixed rail width prevents the banner underline from consuming
+                // the entire eframe horizontal layout and clipping the main page.
+                ui.set_width(224.0);
                 ui.set_min_height(ui.available_height().max(630.0));
                 brand::sidebar_brand(ui);
                 ui.add_space(31.0);
@@ -289,7 +291,7 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let height = ui.available_height();
-        ui.horizontal(|ui| {
+        ui.with_layout(egui::Layout::left_to_right(Align::Min), |ui| {
             ui.set_min_height(height);
             self.nav(ui);
             ui.add_space(16.0);

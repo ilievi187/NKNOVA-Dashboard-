@@ -1,0 +1,35 @@
+name: Nolvus Services URL redaction regression
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+    paths:
+      - 'Nolvus.Services/**'
+      - 'Nolvus.Services.Tests/**'
+      - '.github/workflows/nolvus-services-redaction.yml'
+  pull_request:
+    paths:
+      - 'Nolvus.Services/**'
+      - 'Nolvus.Services.Tests/**'
+      - '.github/workflows/nolvus-services-redaction.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-url-redaction:
+    name: Signed URL redaction (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Run production-path regression test
+        run: dotnet run --project Nolvus.Services.Tests/Nolvus.Services.Tests.csproj --configuration Release

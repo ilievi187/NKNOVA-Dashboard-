@@ -186,6 +186,24 @@ mod tests {
     }
 
     #[test]
+    fn archive_filenames_reject_cross_platform_paths_and_controls() {
+        let rejected = [
+            ("Windows traversal", r"..\evil.zip"),
+            ("drive path", r"C:\mods\evil.zip"),
+            ("UNC path", r"\\server\share\evil.zip"),
+            ("control character", "evil\n.zip"),
+        ];
+
+        for (case, filename) in rejected {
+            let mut manifest = Manifest::parse(EXAMPLE).unwrap();
+            manifest.components[1].archive_file = Some(filename.into());
+            assert!(manifest.validate().is_err(), "accepted {case}: {filename:?}");
+        }
+
+        assert!(safe_filename("CommunityShaders.zip"));
+    }
+
+    #[test]
     fn rejects_untrusted_hash_and_missing_dependencies() {
         let mut m = Manifest::parse(EXAMPLE).unwrap();
         m.components[1].sha256 = Some("bad".into());

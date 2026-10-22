@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 
 namespace Nolvus.Core.Utils
 {
@@ -46,6 +47,11 @@ namespace Nolvus.Core.Utils
         {
             if (!File.Exists(path))
                 return false;
+
+            // Windows does not use Unix execute permission bits. Existing files
+            // are launchable through the platform's normal executable handling.
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                return true;
 
             try
             {

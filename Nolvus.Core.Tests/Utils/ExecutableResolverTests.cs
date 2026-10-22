@@ -1,4 +1,5 @@
 using Nolvus.Core.Utils;
+using System.Runtime.InteropServices;
 using Xunit;
 
 namespace Nolvus.Core.Tests.Utils;
@@ -87,7 +88,11 @@ public sealed class ExecutableResolverTests
         {
             var path = Path.Combine(directory, name);
             File.WriteAllText(path, "#!/bin/sh\nexit 0\n");
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+
             return path;
         }
 

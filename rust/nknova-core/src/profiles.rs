@@ -27,3 +27,25 @@ impl Profile {
         matches!(self, Self::NolvusGraphicsEnb)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Profile;
+
+    #[test]
+    fn profile_labels_are_stable() {
+        assert_eq!(
+            Profile::NolvusGraphicsEnb.label(),
+            "Nolvus Graphics Only + ENB"
+        );
+        assert_eq!(Profile::CommunityShaders.label(), "Community Shaders");
+        assert_eq!(Profile::NknovaModsAndAi.label(), "NKNOVA Mods + AI");
+    }
+
+    #[test]
+    fn only_nolvus_graphics_enb_is_implemented() {
+        assert!(Profile::NolvusGraphicsEnb.implemented());
+        assert!(!Profile::CommunityShaders.implemented());
+        assert!(!Profile::NknovaModsAndAi.implemented());
+    }
+}

@@ -33,23 +33,61 @@ namespace Nolvus.Package.Conditions
                 SourceDir = InstallDir;
             }
 
-            FileInfo File = new FileInfo(SourceDir + "/" + DataToCompare);
+            if (string.IsNullOrWhiteSpace(SourceDir) || string.IsNullOrWhiteSpace(DataToCompare))
+                return false;
 
-            long Size = File.Length / 1024;
+            string relativePath = DataToCompare
+                .Replace('\\', Path.DirectorySeparatorChar)
+                .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+
+            if (Path.IsPathRooted(relativePath))
+                return false;
+
+            string sourceDirectory;
+            string filePath;
+
+            try
+            {
+                sourceDirectory = Path.GetFullPath(SourceDir);
+                filePath = Path.GetFullPath(Path.Combine(sourceDirectory, relativePath));
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                return false;
+            }
+
+            string relativeToSource = Path.GetRelativePath(sourceDirectory, filePath);
+            if (
+                relativeToSource == ".."
+                || relativeToSource.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            )
+            {
+                return false;
+            }
+
+            if (!File.Exists(filePath))
+                return false;
+
+            if (!int.TryParse(ValueToCompare, out int expectedSize))
+                return false;
+
+            FileInfo fileInfo = new FileInfo(filePath);
+
+            long Size = fileInfo.Length / 1024;
 
             switch (this.Operator)
             {
                 case 0:
-                    Valid =  Size == System.Convert.ToInt32(ValueToCompare);
+                    Valid = Size == expectedSize;
                     break;
                 case 1:
-                    Valid = Size != System.Convert.ToInt32(ValueToCompare);
+                    Valid = Size != expectedSize;
                     break;
                 case 2:
-                    Valid = Size > System.Convert.ToInt32(ValueToCompare);
+                    Valid = Size > expectedSize;
                     break;
                 case 3:
-                    Valid = Size < System.Convert.ToInt32(ValueToCompare);
+                    Valid = Size < expectedSize;
                     break;
 
             }

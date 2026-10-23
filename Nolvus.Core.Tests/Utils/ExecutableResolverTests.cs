@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Nolvus.Core.Utils;
 using System.Runtime.InteropServices;
 using Xunit;
@@ -28,6 +29,17 @@ public sealed class ExecutableResolverTests
         Assert.Equal(executable, ExecutableResolver.FindExecutable(executable));
     }
 
+    [WindowsFact]
+    public void FindExecutable_WindowsExplicitBackslashPath_ReturnsFullPath()
+    {
+        using var path = new PathEnvironment();
+        using var temp = new TemporaryDirectory();
+        var executable = temp.CreateExecutable("tool");
+        path.Set(string.Empty);
+
+        Assert.Equal(executable, ExecutableResolver.FindExecutable(executable));
+    }
+
     [Fact]
     public void FindExecutable_WhenNameIsInMultiplePathEntries_ReturnsFirstMatch()
     {
@@ -40,6 +52,43 @@ public sealed class ExecutableResolverTests
         path.Set(string.Join(Path.PathSeparator, firstDirectory, secondDirectory));
 
         Assert.Equal(firstExecutable, ExecutableResolver.FindExecutable("tool"));
+    }
+
+    [WindowsFact]
+    public void FindExecutable_WindowsSearchAppendsExecutableExtensionAndRejectsExtensionlessFiles()
+    {
+        using var path = new PathEnvironment();
+        using var temp = new TemporaryDirectory();
+        var executable = temp.CreateExecutable("wget");
+        File.WriteAllText(Path.Combine(temp.Root, "not-an-executable"), "data");
+        path.Set(temp.Root);
+
+        Assert.Equal(executable, ExecutableResolver.FindExecutable("wget"));
+        Assert.Null(ExecutableResolver.FindExecutable("not-an-executable"));
+    }
+
+    [WindowsFact]
+    public void RequireExecutable_WindowsResolvedPathCanBeStartedByProcessStartInfo()
+    {
+        using var path = new PathEnvironment();
+        path.Set(Environment.SystemDirectory);
+
+        var commandProcessor = ExecutableResolver.RequireExecutable("cmd");
+        Assert.Equal(".exe", Path.GetExtension(commandProcessor), ignoreCase: true);
+
+        using var process = Process.Start(
+            new ProcessStartInfo
+            {
+                FileName = commandProcessor,
+                Arguments = "/c exit 0",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            }
+        );
+
+        Assert.NotNull(process);
+        process!.WaitForExit();
+        Assert.Equal(0, process.ExitCode);
     }
 
     [Fact]
@@ -86,8 +135,12 @@ public sealed class ExecutableResolverTests
 
         public string CreateExecutable(string directory, string name)
         {
-            var path = Path.Combine(directory, name);
-            File.WriteAllText(path, "#!/bin/sh\nexit 0\n");
+            var fileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                && string.IsNullOrEmpty(Path.GetExtension(name))
+                ? name + ".exe"
+                : name;
+            var path = Path.Combine(directory, fileName);
+            File.WriteAllText(path, RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "test executable" : "#!/bin/sh\nexit 0\n");
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
@@ -97,5 +150,14 @@ public sealed class ExecutableResolverTests
         }
 
         public void Dispose() => Directory.Delete(Root, recursive: true);
+    }
+}
+
+public sealed class WindowsFactAttribute : FactAttribute
+{
+    public WindowsFactAttribute()
+    {
+        if (!OperatingSystem.IsWindows())
+            Skip = "This executable extension case requires Windows path semantics.";
     }
 }

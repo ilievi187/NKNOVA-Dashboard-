@@ -11,11 +11,18 @@ namespace Nolvus.Core.Utils
             if (string.IsNullOrWhiteSpace(name))
                 return null;
 
-            // If name contains slash treat as a path and don't search PATH.
-            if (name.Contains('/'))
+            // If name is a path, do not search PATH. Windows paths use backslashes.
+            if (Path.IsPathRooted(name)
+                || name.Contains(Path.DirectorySeparatorChar)
+                || name.Contains(Path.AltDirectorySeparatorChar))
             {
-                var candidate = Path.GetFullPath(name);
-                return IsExecutable(candidate) ? candidate : null;
+                foreach (var candidate in GetExecutableCandidates(Path.GetFullPath(name)))
+                {
+                    if (IsExecutable(candidate))
+                        return candidate;
+                }
+
+                return null;
             }
 
             var pathEnv = Environment.GetEnvironmentVariable("PATH");
@@ -27,9 +34,11 @@ namespace Nolvus.Core.Utils
                 if (string.IsNullOrWhiteSpace(dir))
                     continue;
 
-                var fullPath = Path.Combine(dir.Trim(), name);
-                if (IsExecutable(fullPath))
-                    return fullPath;
+                foreach (var candidate in GetExecutableCandidates(Path.Combine(dir.Trim(), name)))
+                {
+                    if (IsExecutable(candidate))
+                        return candidate;
+                }
             }
 
             return null;
@@ -48,10 +57,14 @@ namespace Nolvus.Core.Utils
             if (!File.Exists(path))
                 return false;
 
-            // Windows does not use Unix execute permission bits. Existing files
-            // are launchable through the platform's normal executable handling.
+            // ProcessStartInfo with UseShellExecute=false launches Windows PE/COM
+            // programs, not arbitrary extensionless files or command scripts.
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                return true;
+            {
+                var extension = Path.GetExtension(path);
+                return string.Equals(extension, ".exe", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(extension, ".com", StringComparison.OrdinalIgnoreCase);
+            }
 
             try
             {
@@ -66,6 +79,14 @@ namespace Nolvus.Core.Utils
                 // If we can't read mode assume not executable
                 return false;
             }
+        }
+
+        private static string[] GetExecutableCandidates(string name)
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && string.IsNullOrEmpty(Path.GetExtension(name)))
+                return new[] { name + ".exe", name + ".com" };
+
+            return new[] { name };
         }
     }
 }

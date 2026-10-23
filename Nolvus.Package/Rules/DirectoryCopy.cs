@@ -50,7 +50,9 @@ namespace Nolvus.Package.Rules
                 );
                 return;
             }
-            else if (!PathResolver.TryResolvePathUnderRoot(extractDir, ".", out string resolvedExtractionRoot))
+            else if (
+                !PathResolver.TryResolvePathUnderRoot(extractDir, ".", out string resolvedExtractionRoot)
+            )
             {
                 ServiceSingleton.Logger?.Log("DirectoryCopy skipped because its extraction root is invalid.");
                 return;

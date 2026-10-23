@@ -83,7 +83,7 @@ namespace Nolvus.Services.Files
             SW.Stop();
         }
 
-        public static string GetSafeHostForLogging(string url)
+        private static string GetSafeHostForLogging(string url)
         {
             if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && !string.IsNullOrWhiteSpace(uri.Host))
                 return uri.Host;
@@ -95,13 +95,6 @@ namespace Nolvus.Services.Files
         {
             Console.WriteLine("URL: " + GetSafeHostForLogging(url));
         }
-
-        // Compatibility aliases for redaction helpers used by callers/tests.
-        public static string RedactUrl(string url) => GetSafeHostForLogging(url);
-        public static string RedactDownloadUrl(string url) => GetSafeHostForLogging(url);
-        public static string GetSafeHost(string url) => GetSafeHostForLogging(url);
-        public static string GetSafeUrlForLogging(string url) => GetSafeHostForLogging(url);
-        public static string SanitizeUrlForLogging(string url) => GetSafeHostForLogging(url);
 
         public void Dispose()
         {

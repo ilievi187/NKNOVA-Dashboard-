@@ -10,54 +10,54 @@ internal static class Program
             "https://user:secret-password@downloads.example.test/private/mod.zip" +
             "?api_key=SECRET_API_KEY&signature=SECRET_SIGNATURE&expires=999999999#fragment";
 
-        var secretValues = new[]
+        var signedUrlLogs = CaptureDownloadUrlLog(signedUrl);
+        var secrets = new[]
         {
             "secret-password",
             "SECRET_API_KEY",
             "SECRET_SIGNATURE",
-            "private/mod.zip",
-            "downloads.example.test/private",
+            "/private/mod.zip",
             "api_key",
             "signature",
             "expires",
             "fragment",
-            "999999999"
+            "999999999",
+            "user:"
         };
 
-        // Exercise the production logging path without making any network request.
+        foreach (var secret in secrets)
+        {
+            if (signedUrlLogs.Contains(secret, StringComparison.Ordinal))
+                throw new Exception("FAILED: signed URL secret reached logs: " + secret);
+        }
+
+        if (!signedUrlLogs.Contains("downloads.example.test", StringComparison.Ordinal))
+            throw new Exception("FAILED: safe host missing from logs");
+
+        var malformedUrl = "not a valid URI?signature=UNPARSEABLE_SECRET";
+        var malformedUrlLogs = CaptureDownloadUrlLog(malformedUrl);
+        if (!string.Equals(malformedUrlLogs.Trim(), "URL: [redacted]", StringComparison.Ordinal))
+            throw new Exception("FAILED: malformed URL was not fully redacted");
+
+        Console.WriteLine("PASS: signed and malformed download URLs are safely logged.");
+        return 0;
+    }
+
+    private static string CaptureDownloadUrlLog(string url)
+    {
         var originalOut = Console.Out;
-        var captured = new StringWriter();
+        using var captured = new StringWriter();
         Console.SetOut(captured);
         try
         {
-            BaseFileDownloader.LogDownloadUrl(signedUrl);
+            // Exercise the production logging entry point without making a network request.
+            BaseFileDownloader.LogDownloadUrl(url);
         }
         finally
         {
             Console.SetOut(originalOut);
         }
 
-        var logs = captured.ToString();
-
-        foreach (var secret in secretValues)
-        {
-            if (logs.Contains(secret, StringComparison.Ordinal))
-                throw new Exception("FAILED: signed URL secret reached logs: " + secret);
-        }
-
-        // The log may contain only the host; ensure no userinfo/path/query/fragment leaked.
-        if (!logs.Contains("downloads.example.test", StringComparison.Ordinal))
-            throw new Exception("FAILED: safe host missing from logs");
-
-        if (logs.Contains("user:", StringComparison.Ordinal) ||
-            logs.Contains("?", StringComparison.Ordinal) ||
-            logs.Contains("#", StringComparison.Ordinal) ||
-            logs.Contains("@", StringComparison.Ordinal))
-        {
-            throw new Exception("FAILED: unsafe URL delimiter reached logs");
-        }
-
-        Console.WriteLine("PASS: BaseFileDownloader redacts signed download URLs.");
-        return 0;
+        return captured.ToString();
     }
 }

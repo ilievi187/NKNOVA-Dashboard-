@@ -25,6 +25,10 @@
     <PackageReference Include="CefGlue.Common" Version="120.6099.211" />
     <PackageReference Include="CefGlue.Avalonia" Version="120.6099.211" />
     <PackageReference Include="Avalonia.Labs.Gif" Version="11.3.1" />
+    <!-- CVE-2024-43485: CefGlue.Common 120.6099.211 brings vulnerable System.Text.Json 6.0.1 transitively. -->
+    <PackageReference Include="System.Text.Json" Version="9.0.21" />
+    <!-- GHSA-xrw6-gwf8-vvr9: Avalonia.FreeDesktop 11.3.8 brings Tmds.DBus.Protocol 0.21.2 transitively. -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
   </ItemGroup>
 
   <ItemGroup>

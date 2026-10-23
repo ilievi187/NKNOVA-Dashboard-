@@ -106,7 +106,7 @@ internal static class Program
     private static void RunRemoteImageLoaderRegression()
     {
         var service = new LibService();
-        var pngBytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jhccAAAAASUVORK5CYII=");
+        var pngBytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVQI12P4//8/AAX+Av7czFnnAAAAAElFTkSuQmCC");
         var supportedImageResponse = StartLocalImageServer(pngBytes);
         using (var image = service.GetImageFromUrl(supportedImageResponse.Url))
         {

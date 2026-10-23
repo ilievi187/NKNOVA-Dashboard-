@@ -30,6 +30,10 @@
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageReference Include="CefGlue.Common" Version="120.6099.211" />
     <PackageReference Include="CefGlue.Avalonia" Version="120.6099.211" />
+    <!-- CVE-2024-43485: keep CefGlue's vulnerable System.Text.Json dependency on the patched .NET 9 servicing line. -->
+    <PackageReference Include="System.Text.Json" Version="9.0.21" />
+    <!-- GHSA-xrw6-gwf8-vvr9: Avalonia.FreeDesktop 11.3.8 requires >= 0.21.2; 0.21.3 contains the fix. -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
     <PackageReference Include="ReactiveUI" Version="20.1.1" />
     <PackageReference Include="Avalonia.ReactiveUI" Version="11.3.8" />
     <PackageReference Include="ValveKeyValue" Version="0.20.0.417" />

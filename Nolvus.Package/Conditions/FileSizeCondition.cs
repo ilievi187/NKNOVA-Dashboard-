@@ -5,6 +5,7 @@ using System.Text;
 using System.IO;
 using System.Threading.Tasks;
 using System.Xml;
+using Nolvus.Package.Utilities;
 
 namespace Nolvus.Package.Conditions
 {
@@ -33,23 +34,32 @@ namespace Nolvus.Package.Conditions
                 SourceDir = InstallDir;
             }
 
-            FileInfo File = new FileInfo(SourceDir + "/" + DataToCompare);
+            if (!PathResolver.TryResolvePathUnderRoot(SourceDir, DataToCompare, out string filePath))
+                return false;
 
-            long Size = File.Length / 1024;
+            if (!File.Exists(filePath))
+                return false;
+
+            if (!int.TryParse(ValueToCompare, out int expectedSize))
+                return false;
+
+            FileInfo fileInfo = new FileInfo(filePath);
+
+            long Size = fileInfo.Length / 1024;
 
             switch (this.Operator)
             {
                 case 0:
-                    Valid =  Size == System.Convert.ToInt32(ValueToCompare);
+                    Valid = Size == expectedSize;
                     break;
                 case 1:
-                    Valid = Size != System.Convert.ToInt32(ValueToCompare);
+                    Valid = Size != expectedSize;
                     break;
                 case 2:
-                    Valid = Size > System.Convert.ToInt32(ValueToCompare);
+                    Valid = Size > expectedSize;
                     break;
                 case 3:
-                    Valid = Size < System.Convert.ToInt32(ValueToCompare);
+                    Valid = Size < expectedSize;
                     break;
 
             }

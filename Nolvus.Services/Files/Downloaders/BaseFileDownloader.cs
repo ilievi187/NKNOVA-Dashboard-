@@ -50,7 +50,7 @@ namespace Nolvus.Services.Files
             FileName = Path.GetFileName(path);
 
             Console.WriteLine("Downloading to: " + path);
-            Console.WriteLine("URL: " + url);
+            LogDownloadUrl(url);
 
 
             using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
@@ -81,6 +81,19 @@ namespace Nolvus.Services.Files
             }
 
             SW.Stop();
+        }
+
+        private static string GetSafeHostForLogging(string url)
+        {
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && !string.IsNullOrWhiteSpace(uri.Host))
+                return uri.Host;
+
+            return "[redacted]";
+        }
+
+        public static void LogDownloadUrl(string url)
+        {
+            Console.WriteLine("URL: " + GetSafeHostForLogging(url));
         }
 
         public void Dispose()

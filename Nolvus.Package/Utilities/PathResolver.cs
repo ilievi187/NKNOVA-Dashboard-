@@ -132,8 +132,8 @@ namespace Nolvus.Package.Utilities
             }
 
         /// <summary>
-        /// Resolves a relative path lexically under a root directory and rejects rooted or
-        /// parent-traversal paths that would escape that root. Symlink targets are not resolved.
+        /// Resolves a relative path under a root directory and rejects rooted paths,
+        /// parent traversal, and symbolic links or junctions that resolve outside that root.
         /// </summary>
         public static bool TryResolvePathUnderRoot(
             string rootDirectory,
@@ -146,38 +146,132 @@ namespace Nolvus.Package.Utilities
             if (string.IsNullOrWhiteSpace(rootDirectory) || string.IsNullOrWhiteSpace(relativePath))
                 return false;
 
-            string normalizedPath = relativePath
-                .Replace('\\', Path.DirectorySeparatorChar)
-                .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
-
-            if (Path.IsPathRooted(normalizedPath))
-                return false;
-
             try
             {
                 string fullRoot = Path.GetFullPath(rootDirectory);
-                string candidate = Path.GetFullPath(Path.Combine(fullRoot, normalizedPath));
-                string relativeToRoot = Path.GetRelativePath(fullRoot, candidate);
+                string normalizedPath = relativePath
+                    .Replace('\\', Path.DirectorySeparatorChar)
+                    .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
 
-                if (
-                    Path.IsPathRooted(relativeToRoot)
-                    || relativeToRoot == ".."
-                    || relativeToRoot.StartsWith(
-                        ".." + Path.DirectorySeparatorChar,
-                        StringComparison.Ordinal
-                    )
-                )
-                {
+                if (Path.IsPathRooted(normalizedPath))
                     return false;
+
+                if (!TryResolveExistingPathComponents(fullRoot, out string resolvedRoot))
+                    return false;
+
+                string currentPath = resolvedRoot;
+                string[] segments = normalizedPath.Split(
+                    new[] { Path.DirectorySeparatorChar },
+                    StringSplitOptions.RemoveEmptyEntries
+                );
+
+                foreach (string segment in segments)
+                {
+                    if (segment == ".")
+                        continue;
+
+                    if (segment == "..")
+                    {
+                        string? parent = Path.GetDirectoryName(currentPath);
+                        if (parent is null)
+                            return false;
+
+                        currentPath = parent;
+                    }
+                    else
+                    {
+                        string nextPath = Path.GetFullPath(Path.Combine(currentPath, segment));
+                        if (!TryResolvePathLink(nextPath, out currentPath))
+                            return false;
+                    }
+
+                    if (!IsPathWithinRoot(resolvedRoot, currentPath))
+                        return false;
                 }
 
-                resolvedPath = candidate;
+                resolvedPath = Path.GetFullPath(currentPath);
                 return true;
             }
             catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
             {
                 return false;
             }
+        }
+
+        private static bool TryResolveExistingPathComponents(string path, out string resolvedPath)
+        {
+            resolvedPath = string.Empty;
+            string fullPath = Path.GetFullPath(path);
+            string? pathRoot = Path.GetPathRoot(fullPath);
+            if (string.IsNullOrEmpty(pathRoot))
+                return false;
+
+            string currentPath = pathRoot;
+            string[] segments = fullPath[pathRoot.Length..].Split(
+                new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+                StringSplitOptions.RemoveEmptyEntries
+            );
+
+            foreach (string segment in segments)
+            {
+                string nextPath = Path.GetFullPath(Path.Combine(currentPath, segment));
+                if (!TryResolvePathLink(nextPath, out currentPath))
+                    return false;
+            }
+
+            resolvedPath = Path.GetFullPath(currentPath);
+            return true;
+        }
+
+        private static bool TryResolvePathLink(string path, out string resolvedPath)
+        {
+            resolvedPath = Path.GetFullPath(path);
+
+            try
+            {
+                FileSystemInfo pathInfo = Directory.Exists(resolvedPath)
+                    ? new DirectoryInfo(resolvedPath)
+                    : new FileInfo(resolvedPath);
+
+                if (pathInfo.LinkTarget is null)
+                    return true;
+
+                FileSystemInfo? linkTarget = pathInfo.ResolveLinkTarget(returnFinalTarget: true);
+                if (linkTarget is null)
+                    return false;
+
+                // A link's target may itself contain a symlink in a parent component.
+                // Walk the target path too instead of trusting only its lexical spelling.
+                return TryResolveExistingPathComponents(linkTarget.FullName, out resolvedPath);
+            }
+            catch (FileNotFoundException)
+            {
+                // A non-existent path is valid as the destination of a future write.
+                return true;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                // A non-existent path is valid as the destination of a future write.
+                return true;
+            }
+            catch (Exception ex) when (
+                ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException
+            )
+            {
+                return false;
+            }
+        }
+
+        private static bool IsPathWithinRoot(string root, string path)
+        {
+            string relativePath = Path.GetRelativePath(root, path);
+            StringComparison comparison = OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+
+            return !Path.IsPathRooted(relativePath)
+                && relativePath != ".."
+                && !relativePath.StartsWith(".." + Path.DirectorySeparatorChar, comparison);
         }
 
     }

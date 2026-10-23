@@ -6,6 +6,8 @@ using System.IO;
 using System.Net;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using IniParser;
+using IniParser.Model;
 using Nolvus.Core.Interfaces;
 using Nolvus.Core.Misc;
 using Nolvus.Core.Services;
@@ -2859,33 +2861,72 @@ ccafdsse001-dwesanctuary.esm";
             AppendToIni(IniDir, "customExecutables", Size + "\\workingDirectory", WineWorkingDir);
         }
 
-        //TODO testing required
         public static void ModifyExecutable(string ExecutableName, string IniDir, string Binary, string Args, string WorkingDirectory)
         {
-            var Parser = ServiceSingleton.Settings.GetIniParser();
+            if (string.IsNullOrWhiteSpace(ExecutableName) || string.IsNullOrWhiteSpace(IniDir))
+                return;
 
-            var IniData = Parser.ReadFile(Path.Combine(IniDir, "ModOrganizer.ini"));
+            string IniPath = Path.Combine(IniDir, "ModOrganizer.ini");
+            if (!File.Exists(IniPath))
+                return;
 
-            var Section = IniData.Sections.Where(x => x.SectionName == "customExecutables").FirstOrDefault();
+            var Parser = GetIniParser();
+            var IniData = Parser.ReadFile(IniPath);
+            string? ExecutableIndex = FindExecutableIndex(IniData, ExecutableName);
 
-            var KeyIndex = Section.Keys.Where(x => x.KeyName.Contains("title") && x.Value.Contains(ExecutableName)).FirstOrDefault().KeyName.Substring(0, 1);
+            if (ExecutableIndex == null)
+                return;
 
-            IniData["customExecutables"][KeyIndex + "\\" + "binary"] = Binary;
-            IniData["customExecutables"][KeyIndex + "\\" + "arguments"] = Args;
-            IniData["customExecutables"][KeyIndex + "\\" + "workingDirectory"] = WorkingDirectory;
+            IniData["customExecutables"][ExecutableIndex + "\\binary"] = Binary;
+            IniData["customExecutables"][ExecutableIndex + "\\arguments"] = Args;
+            IniData["customExecutables"][ExecutableIndex + "\\workingDirectory"] = WorkingDirectory;
 
-            Parser.WriteFile(Path.Combine(IniDir, "ModOrganizer.ini"), IniData);
+            Parser.WriteFile(IniPath, IniData);
         }
 
         public static bool CheckIfExecutableExists(string ExecutableName, string IniDir)
         {
-            var Parser = ServiceSingleton.Settings.GetIniParser();
+            if (string.IsNullOrWhiteSpace(ExecutableName) || string.IsNullOrWhiteSpace(IniDir))
+                return false;
 
-            var IniData = Parser.ReadFile(Path.Combine(IniDir, "ModOrganizer.ini"));
+            string IniPath = Path.Combine(IniDir, "ModOrganizer.ini");
+            if (!File.Exists(IniPath))
+                return false;
 
-            var Section = IniData.Sections.Where(x => x.SectionName == "customExecutables").FirstOrDefault();
+            var IniData = GetIniParser().ReadFile(IniPath);
 
-            return Section.Keys.Where(x => x.KeyName.Contains("title") && x.Value.Contains(ExecutableName)).FirstOrDefault() != null;
+            return FindExecutableIndex(IniData, ExecutableName) != null;
+        }
+
+        private static FileIniDataParser GetIniParser()
+        {
+            return ServiceSingleton.Settings?.GetIniParser() ?? new FileIniDataParser();
+        }
+
+        private static string? FindExecutableIndex(IniData IniData, string ExecutableName)
+        {
+            var Section = IniData.Sections.FirstOrDefault(x => x.SectionName == "customExecutables");
+            if (Section == null)
+                return null;
+
+            var Title = Section.Keys.FirstOrDefault(x => IsExecutableTitle(x.KeyName, x.Value, ExecutableName));
+            if (Title == null)
+                return null;
+
+            int Separator = Title.KeyName.IndexOf('\\');
+            if (Separator <= 0)
+                return null;
+
+            string Index = Title.KeyName.Substring(0, Separator);
+            return int.TryParse(Index, out int NumericIndex) && NumericIndex > 0 ? Index : null;
+        }
+
+        private static bool IsExecutableTitle(string KeyName, string Value, string ExecutableName)
+        {
+            int Separator = KeyName.IndexOf('\\');
+            return Separator > 0
+                && string.Equals(KeyName.Substring(Separator + 1), "title", StringComparison.OrdinalIgnoreCase)
+                && Value.IndexOf(ExecutableName, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
 
@@ -3267,4 +3308,3 @@ ccafdsse001-dwesanctuary.esm";
         #endregion                       
     }
 }
-

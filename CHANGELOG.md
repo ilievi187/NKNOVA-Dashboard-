@@ -8,7 +8,7 @@ This follow-up candidate supersedes the still-unpublished `v0.1.0-preview.1` dra
 
 - Limits remote image downloads to 16 MiB and 30 seconds, bounds decoded dimensions to 40 million pixels, and decodes only the first frame.
 - Accepts PNG, JPEG, WebP, GIF, and BMP signatures. Unsupported TIFF and other formats are rejected before ImageSharp decoding.
-- Routes account-avatar loading through the guarded image service on a background thread.
+- Moves account-avatar and error-summary remote image loading off the UI thread; error thumbnails are bounded to two concurrent loads.
 - Adds integration regressions using a local HTTP server for a valid PNG, rejected TIFF, oversized declared responses, and oversized streamed responses without `Content-Length`.
 
 ### Limitations

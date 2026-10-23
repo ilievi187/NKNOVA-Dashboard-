@@ -14,7 +14,7 @@ NKNOVA is a GPL-3.0-licensed community fork of the Avalonia-based Nolvus Dashboa
 - File-copy path checks, URL-log redaction, malformed-rule behavior, and selected service behavior have automated regression coverage.
 - Remote thumbnail downloads are capped at 16 MiB and 30 seconds. The preview accepts PNG, JPEG, WebP, GIF, and BMP, caps decoded images at 40 million pixels, and decodes only the first frame. Unsupported TIFF/other formats and oversized files are rejected to bound memory use.
 - The inherited upstream updater is disabled and not packaged. Install later NKNOVA versions manually from a verified release.
-- The image download API remains synchronous for installer call sites. The account-avatar path runs it off the UI thread; other callers may still block their invoking thread.
+- The `LibService` API remains synchronous. Current UI callers move network decoding into background tasks with bounded concurrency; future callers must not invoke it directly on the UI thread.
 
 ## Not verified or not included
 

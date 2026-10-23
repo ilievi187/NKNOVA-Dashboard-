@@ -28,8 +28,10 @@ namespace Nolvus.Package.Rules
             if (!PathResolver.TryResolvePathUnderRoot(baseDir, Name, out string fullPath))
                 return;
 
-            string fullRoot = Path.GetFullPath(baseDir);
-            if (Path.GetRelativePath(fullRoot, fullPath) == ".")
+            if (
+                PathResolver.TryResolvePathUnderRoot(baseDir, ".", out string fullRoot)
+                && Path.GetRelativePath(fullRoot, fullPath) == "."
+            )
                 return;
 
             string? targetDirectory = Path.GetDirectoryName(fullPath);

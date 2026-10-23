@@ -121,6 +121,13 @@ namespace Nolvus.Dashboard.Controls
         {
             var window = TopLevel.GetTopLevel(this) as DashboardWindow;
 
+            if (!Fluorine.IsSupported)
+            {
+                await NolvusMessageBox.Show(window, "Fluorine Manager",
+                    "Fluorine Manager is currently supported only on Linux.", MessageBoxType.Error);
+                return;
+            }
+
             if (!Fluorine.IsInstalled)
             {
                 bool? Install = await NolvusMessageBox.ShowConfirmation(window, "Fluorine Manager",

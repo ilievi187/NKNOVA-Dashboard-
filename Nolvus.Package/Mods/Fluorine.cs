@@ -47,6 +47,14 @@ namespace Nolvus.Package.Mods
             get { return Path.Combine(InstallDirectory, "fluorine-manager"); }
         }
 
+        /// <summary>
+        /// Fluorine Manager is distributed here as a native Linux application.
+        /// </summary>
+        public static bool IsSupported
+        {
+            get { return OperatingSystem.IsLinux(); }
+        }
+
         private static string MarkerFile
         {
             get { return Path.Combine(InstallDirectory, ReleaseMarker); }
@@ -54,7 +62,7 @@ namespace Nolvus.Package.Mods
 
         public static bool IsInstalled
         {
-            get { return File.Exists(Executable) && File.Exists(MarkerFile); }
+            get { return IsSupported && File.Exists(Executable) && File.Exists(MarkerFile); }
         }
 
         // fluorine-manager is a bash wrapper that ends in `exec ModOrganizer-core`, so the wrapper
@@ -63,6 +71,9 @@ namespace Nolvus.Package.Mods
         {
             get
             {
+                if (!IsSupported)
+                    return false;
+
                 var psi = new ProcessStartInfo
                 {
                     FileName = "pgrep",
@@ -96,6 +107,8 @@ namespace Nolvus.Package.Mods
         // ~/.config/Mod Organizer Team/Mod Organizer.conf, not from anything passed here.
         public static Process Start()
         {
+            EnsureSupported();
+
             if (!IsInstalled)
                 throw new FileNotFoundException("Fluorine Manager is not installed", Executable);
 
@@ -134,6 +147,8 @@ namespace Nolvus.Package.Mods
         /// </remarks>
         public static async Task Install(DownloadProgressChangedHandler OnDownload, ExtractProgressChangedHandler OnExtract, Func<IBrowserInstance> Browser = null)
         {
+            EnsureSupported();
+
             if (IsInstalled)
             {
                 ServiceSingleton.Logger.Log($"[FLUORINE] Release {GetInstalledRelease()} already installed in {InstallDirectory}, skipping download");
@@ -351,6 +366,10 @@ namespace Nolvus.Package.Mods
 
         private static void EnsureExecutable()
         {
+            // File.GetUnixFileMode and File.SetUnixFileMode are not available on Windows.
+            if (!OperatingSystem.IsLinux())
+                return;
+
             foreach (var Name in new[] { "fluorine-manager", "clf3", "ModOrganizer-core", "7zz" })
             {
                 var Path_ = Path.Combine(InstallDirectory, Name);
@@ -370,6 +389,12 @@ namespace Nolvus.Package.Mods
                     ServiceSingleton.Logger.Log($"[FLUORINE] Could not mark {Name} executable : {ex.Message}");
                 }
             }
+        }
+
+        private static void EnsureSupported()
+        {
+            if (!IsSupported)
+                throw new PlatformNotSupportedException("Fluorine Manager is currently supported only on Linux.");
         }
     }
 }

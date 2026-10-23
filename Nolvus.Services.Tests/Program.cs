@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -50,7 +51,7 @@ internal static class Program
 
         Console.WriteLine("PASS: signed and malformed download URLs are safely logged.");
         Console.WriteLine("PASS: Steam discovery validates complete secondary libraries and rejects incomplete or traversing installs.");
-        Console.WriteLine("PASS: remote images require supported signatures and are bounded by response size.");
+        Console.WriteLine("PASS: remote images enforce supported format, response-byte, and decoded-pixel limits.");
         return 0;
     }
 
@@ -137,6 +138,53 @@ internal static class Program
             () => service.GetImageFromUrl(streamedOversizedImageResponse.Url),
             "oversized response without Content-Length");
         streamedOversizedImageResponse.ServerTask.GetAwaiter().GetResult();
+
+        var oversizedDimensionsResponse = StartLocalImageServer(CreateOversizedRle8Bmp());
+        AssertRemoteImageRejected(
+            () => service.GetImageFromUrl(oversizedDimensionsResponse.Url),
+            "image over the pixel limit");
+        oversizedDimensionsResponse.ServerTask.GetAwaiter().GetResult();
+    }
+
+    private static byte[] CreateOversizedRle8Bmp()
+    {
+        const int width = 7000;
+        const int height = 7000;
+        const int bitmapHeaderSize = 14 + 40 + (256 * 4);
+        using var encodedPixels = new MemoryStream();
+        for (var row = 0; row < height; row++)
+        {
+            var remaining = width;
+            while (remaining > 0)
+            {
+                var runLength = Math.Min(byte.MaxValue, remaining);
+                encodedPixels.WriteByte((byte)runLength);
+                encodedPixels.WriteByte(0);
+                remaining -= runLength;
+            }
+
+            encodedPixels.WriteByte(0);
+            encodedPixels.WriteByte(0);
+        }
+
+        encodedPixels.WriteByte(0);
+        encodedPixels.WriteByte(1);
+        var pixelData = encodedPixels.ToArray();
+        var bitmap = new byte[bitmapHeaderSize + pixelData.Length];
+        bitmap[0] = (byte)'B';
+        bitmap[1] = (byte)'M';
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(2, 4), bitmap.Length);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(10, 4), bitmapHeaderSize);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(14, 4), 40);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(18, 4), width);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(22, 4), height);
+        BinaryPrimitives.WriteInt16LittleEndian(bitmap.AsSpan(26, 2), 1);
+        BinaryPrimitives.WriteInt16LittleEndian(bitmap.AsSpan(28, 2), 8);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(30, 4), 1);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(34, 4), pixelData.Length);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(46, 4), 256);
+        pixelData.CopyTo(bitmap, bitmapHeaderSize);
+        return bitmap;
     }
 
     private static (string Url, Task ServerTask) StartLocalImageServer(

@@ -4,7 +4,7 @@ using System.Xml;
 
 namespace Nolvus.Package.Rules
 {
-    public class CreateRule : Rule
+    public abstract class CreateRule : Rule
     {
         public string Name { get; set; } = string.Empty;
         public int Source { get; set; } = 0;

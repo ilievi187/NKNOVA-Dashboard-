@@ -1,0 +1,76 @@
+name: NKNOVA Security Gates
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: read
+
+concurrency:
+  group: nknova-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - actions
+          - csharp
+          - rust
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:${{ matrix.language }}
+
+  dependency-review:
+    name: Dependency Review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Review dependency changes for new vulnerabilities and licenses
+        id: dependency-review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: low
+          fail-on-scopes: runtime,development,unknown
+          allow-licenses: Apache-2.0, BSD-2-Clause, BSD-3-Clause, BSL-1.0, CC0-1.0, GPL-3.0-only, GPL-3.0-or-later, ISC, LGPL-3.0-only, LGPL-3.0-or-later, MIT, MPL-2.0, 0BSD, Unlicense
+      - name: Fail when dependency review reports an invalid license change
+        if: always()
+        env:
+          INVALID_LICENSE_CHANGES: ${{ steps.dependency-review.outputs.invalid-license-changes }}
+        run: |
+          if [[ -z "$INVALID_LICENSE_CHANGES" ]]; then
+            exit 0
+          fi
+          if ! jq -e 'type == "array" and length == 0' <<<"$INVALID_LICENSE_CHANGES" >/dev/null; then
+            echo "Dependency review found license changes that require manual review." >&2
+            exit 1
+          fi

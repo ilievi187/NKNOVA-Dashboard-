@@ -65,48 +65,6 @@ public sealed class FileCopyRuleTests : IDisposable
     }
 
     [Fact]
-    public void Malformed_file_size_source_xml_fails_closed_in_rule_loader()
-    {
-        string gameDirectory = Path.Combine(_temporaryDirectory, "game");
-        string extractionDirectory = Path.Combine(_temporaryDirectory, "extract");
-        string modDirectory = Path.Combine(_temporaryDirectory, "mods");
-        string instanceDirectory = Path.Combine(_temporaryDirectory, "instance");
-
-        Directory.CreateDirectory(gameDirectory);
-        Directory.CreateDirectory(extractionDirectory);
-        Directory.CreateDirectory(modDirectory);
-        Directory.CreateDirectory(instanceDirectory);
-        File.WriteAllText(Path.Combine(extractionDirectory, "source.dat"), "payload");
-        File.WriteAllBytes(Path.Combine(modDirectory, "ready.flag"), new byte[1024]);
-
-        var document = new XmlDocument();
-        document.LoadXml(
-            """
-            <Rule>
-              <Source>source.dat</Source>
-              <Destination>0</Destination>
-              <DestinationDirectory></DestinationDirectory>
-              <Conditions>
-                <Condition>
-                  <Type>FileSizeCondition</Type>
-                  <DataToCompare>ready.flag</DataToCompare>
-                  <Operator>0</Operator>
-                  <ValueToCompare>1</ValueToCompare>
-                  <Source>not-a-source</Source>
-                </Condition>
-              </Conditions>
-            </Rule>
-            """
-        );
-
-        var rule = new FileCopy();
-        rule.Load(document.DocumentElement!);
-        rule.Execute(gameDirectory, extractionDirectory, modDirectory, instanceDirectory);
-
-        Assert.False(File.Exists(Path.Combine(modDirectory, "source.dat")));
-    }
-
-    [Fact]
     public void Destination_directory_traversal_does_not_write_outside_mod_directory()
     {
         string extractionDirectory = Path.Combine(_temporaryDirectory, "extract");

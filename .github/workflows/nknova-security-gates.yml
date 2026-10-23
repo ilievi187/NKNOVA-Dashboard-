@@ -122,16 +122,16 @@ jobs:
 
           while IFS= read -r path; do
             [[ -n "$path" ]] || continue
-            status=$(git diff --name-status "$base" "$GITHUB_SHA" -- "$path" | awk 'NR == 1 { print $1 }')
             case "$path" in
-              Nolvus.Services.Tests/Nolvus.Services.Tests.csproj)
-                if [[ "$status" != "A" ]] || grep -Eq '<PackageReference|<PackageVersion|<PackageDownload' "$path"; then
-                  echo "The focused services test project changed its dependency declarations; manual license/advisory review required." >&2
+              *.csproj|*.props|*.targets)
+                patch=$(git diff "$base" "$GITHUB_SHA" -- "$path")
+                if grep -Eq '^[+-][^+-].*<(PackageReference|PackageVersion|PackageDownload)([[:space:]>])' <<<"$patch"; then
+                  echo "Third-party package declarations changed in ${path}. Manual license/advisory review is required because this fork cannot use GitHub's Dependency Review API." >&2
                   needs_review=true
                 fi
                 ;;
-              *.csproj|*.props|*.targets|*/packages.lock.json|packages.lock.json|*/packages.config|packages.config|*/Cargo.toml|Cargo.toml|*/Cargo.lock|Cargo.lock|NuGet.config|nuget.config|global.json)
-                echo "Dependency manifest changed: ${path}. Manual license/advisory review is required because this fork cannot use GitHub's Dependency Review API." >&2
+              */packages.lock.json|packages.lock.json|*/packages.config|packages.config|*/Cargo.toml|Cargo.toml|*/Cargo.lock|Cargo.lock|NuGet.config|nuget.config|global.json)
+                echo "Dependency lock/source configuration changed: ${path}. Manual license/advisory review is required because this fork cannot use GitHub's Dependency Review API." >&2
                 needs_review=true
                 ;;
             esac

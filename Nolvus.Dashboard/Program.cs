@@ -6,7 +6,6 @@ using Nolvus.Services.Logger;
 using Nolvus.Services.Globals;
 using Nolvus.Services.Settings;
 using Nolvus.Services.Folders;
-using Nolvus.Services.Updater;
 using Nolvus.Services.Lib;
 using Nolvus.Services.Game;
 using Nolvus.Services.Files;
@@ -121,7 +120,6 @@ internal static class Program
         ServiceSingleton.RegisterService<ISettingsService>(new SettingsService());
         ServiceSingleton.RegisterService<IFolderService>(new FolderService());            
         ServiceSingleton.RegisterService<IInstanceService>(new InstanceService());
-        ServiceSingleton.RegisterService<IUpdaterService>(new UpdaterService());
         ServiceSingleton.RegisterService<IPackageService>(PackageService);            
         ServiceSingleton.RegisterService<ILibService>(new LibService());
         ServiceSingleton.RegisterService<IGameService>(new GameService());

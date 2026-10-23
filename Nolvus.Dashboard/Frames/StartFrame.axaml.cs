@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
@@ -15,13 +14,8 @@ using Nolvus.Dashboard.Controls;
 using Nolvus.Dashboard.Frames.Installer;
 using Nolvus.Dashboard.Frames.Instance;
 using Nolvus.Dashboard.Frames.Settings;
-using System.Threading.Tasks;
-using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text.Json;
 using Avalonia.Controls.ApplicationLifetimes;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
 namespace Nolvus.Dashboard.Frames
 {
@@ -147,7 +141,8 @@ namespace Nolvus.Dashboard.Frames
                     var window = TopLevel.GetTopLevel(this) as DashboardWindow;
                     window?.SetAccountImageVisible(true);
                     await CheckNolvus();
-                    await CheckForUpdates();
+                    // NKNOVA is a fork and has no verified update channel yet. Do not query
+                    // or launch the upstream updater, which could replace this build.
                     await CheckNexus();
 
                     var InstancesCheck = await CheckInstances();
@@ -223,40 +218,6 @@ namespace Nolvus.Dashboard.Frames
             }
         }
 
-        private async Task CheckForUpdates()
-        {
-            try
-            {
-                ServiceSingleton.Dashboard.Status("Checking for updates...");
-                ServiceSingleton.Logger.Log("Checking for updates...");
-                //var latest = await ApiManager.Service.Installer.GetLatestInstaller(); //ignore upstream release info so we can check against our own
-                var latest = await GetLatestReleaseTag();
-                ServiceSingleton.Dashboard.Progress(50);
-
-                if (ServiceSingleton.Dashboard.IsOlder(latest))
-                {
-                    ServiceSingleton.Logger.Log(string.Format("New Dashboard version available : {0}", latest));
-                    ServiceSingleton.Logger.Log("Launching updater...");
-
-                    LaunchUpdater(
-                        installDir: AppContext.BaseDirectory,
-                        targetVersion: latest
-                    );
-
-                    ServiceSingleton.Logger.Log("Closing application...");
-                    ServiceSingleton.Dashboard.ShutDown();
-                }
-                else
-                {
-                    ServiceSingleton.Logger.Log("Nolvus Dashboard installer is up to date");
-                }
-            }
-            catch (Exception ex)
-            {
-                ServiceSingleton.Logger.Log("Update check failed: " + ex);
-            }
-        }
-
         private async Task CheckNexus()
         {
             ServiceSingleton.Dashboard.Status("Connecting to Nexus...");
@@ -322,46 +283,5 @@ namespace Nolvus.Dashboard.Frames
             }
         }
 
-        private async Task<string> GetLatestReleaseTag()
-        {
-            using var handler = new HttpClientHandler
-            {
-                AllowAutoRedirect = true
-            };
-
-            using var client = new HttpClient(handler);
-            using var response = await client.GetAsync("https://github.com/sableeyed/NolvusDashboard/releases/latest", HttpCompletionOption.ResponseHeadersRead);
-
-            response.EnsureSuccessStatusCode();
-            var uri = response.RequestMessage!.RequestUri!;
-            var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            var version = segments[^1];
-            return version;
-        }
-
-        private static void LaunchUpdater(string installDir, string targetVersion)
-        {
-            installDir = Path.GetFullPath(installDir);
-
-            var updaterExe = Path.Combine(installDir, "NolvusUpdater");
-
-            var psi = new ProcessStartInfo
-            {
-                FileName = updaterExe,
-                WorkingDirectory = installDir,
-                UseShellExecute = false
-            };
-
-            psi.ArgumentList.Add("--install-dir");
-            psi.ArgumentList.Add(installDir);
-
-            psi.ArgumentList.Add("--version");
-            psi.ArgumentList.Add(targetVersion);
-
-            psi.ArgumentList.Add("--pid");
-            psi.ArgumentList.Add(Environment.ProcessId.ToString());
-
-            Process.Start(psi);
-        }
     }
 }

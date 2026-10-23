@@ -43,6 +43,7 @@ internal static class Program
         RunSteamLibraryDetectionRegression();
 
         Console.WriteLine("PASS: signed and malformed download URLs are safely logged.");
+        Console.WriteLine("PASS: Steam discovery validates complete secondary libraries and rejects incomplete or traversing installs.");
         return 0;
     }
 
@@ -60,7 +61,6 @@ internal static class Program
             Directory.CreateDirectory(Path.GetDirectoryName(libraryFolders)!);
             Directory.CreateDirectory(Path.GetDirectoryName(manifest)!);
             Directory.CreateDirectory(gameDirectory);
-            File.WriteAllText(Path.Combine(gameDirectory, "SkyrimSE.exe"), "test fixture only");
 
             var escapedLibraryPath = libraryRoot.Replace("\\", "\\\\", StringComparison.Ordinal);
             File.WriteAllText(libraryFolders,
@@ -68,7 +68,11 @@ internal static class Program
             File.WriteAllText(manifest,
                 "\"AppState\" { \"installdir\" \"Skyrim Special Edition\" }");
 
-            var service = new GameService(new[] { steamRoot });
+            var service = new GameService(new[] { "relative-root-must-be-ignored", steamRoot });
+            if (!string.IsNullOrEmpty(service.GetSkyrimSEDirectory()))
+                throw new Exception("FAILED: an incomplete Steam manifest was reported as a usable game installation.");
+
+            File.WriteAllText(Path.Combine(gameDirectory, "SkyrimSE.exe"), "test fixture only");
             var detected = service.GetSkyrimSEDirectory();
             var expected = Path.GetFullPath(gameDirectory);
             if (!string.Equals(detected, expected,
@@ -76,6 +80,14 @@ internal static class Program
             {
                 throw new Exception($"FAILED: Steam library detection returned '{detected}', expected '{expected}'.");
             }
+
+            var escapedGameDirectory = Path.Combine(libraryRoot, "escaped-game");
+            Directory.CreateDirectory(escapedGameDirectory);
+            File.WriteAllText(Path.Combine(escapedGameDirectory, "SkyrimSE.exe"), "test fixture only");
+            File.WriteAllText(manifest,
+                "\"AppState\" { \"installdir\" \"../../escaped-game\" }");
+            if (!string.IsNullOrEmpty(service.GetSkyrimSEDirectory()))
+                throw new Exception("FAILED: a traversing Steam installdir was accepted.");
         }
         finally
         {

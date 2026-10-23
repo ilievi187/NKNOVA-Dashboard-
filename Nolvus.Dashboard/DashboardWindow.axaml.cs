@@ -122,7 +122,8 @@ public partial class DashboardWindow : Window, IDashboard
 
     private string DashboardExe
     {
-        get { return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NolvusDashboard"); }
+        get { return Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+            OperatingSystem.IsWindows() ? "NolvusDashboard.exe" : "NolvusDashboard"); }
     }
 
     private void SetWindowIcon()

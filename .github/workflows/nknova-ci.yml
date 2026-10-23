@@ -44,7 +44,7 @@ jobs:
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
       - name: Run package tests
         run: dotnet test Nolvus.Package.Tests/Nolvus.Package.Tests.csproj --configuration Release --logger "console;verbosity=detailed"
 
@@ -65,7 +65,7 @@ jobs:
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
       - name: Prevent removal of an adopted redaction regression project
         if: ${{ github.event_name == 'pull_request' && hashFiles('Nolvus.Services.Tests/Nolvus.Services.Tests.csproj') == '' }}
         shell: bash
@@ -92,12 +92,12 @@ jobs:
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
       - name: Run full solution tests
         run: dotnet test "Nolvus Dashboard Linux.sln" --configuration Release
       - name: Build the full solution
         run: dotnet build "Nolvus Dashboard Linux.sln" --configuration Release --no-restore
-      - name: Package Linux dashboard and updater
+      - name: Package Linux dashboard
         shell: bash
         run: |
           mkdir -p "$HOME/Desktop"

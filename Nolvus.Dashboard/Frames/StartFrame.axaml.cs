@@ -16,6 +16,7 @@ using Nolvus.Dashboard.Frames.Instance;
 using Nolvus.Dashboard.Frames.Settings;
 using Avalonia.Controls.ApplicationLifetimes;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace Nolvus.Dashboard.Frames
 {

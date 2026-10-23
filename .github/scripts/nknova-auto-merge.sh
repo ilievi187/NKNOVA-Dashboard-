@@ -100,7 +100,7 @@ fi
 
 for number in "${prs[@]}"; do
     pr=$(gh pr view "$number" --repo "$repo" \
-        --json number,state,isDraft,author,baseRefName,headRefOid,headRepository,headRepositoryOwner,mergeable,mergeStateStatus,files)
+        --json number,state,isDraft,author,body,baseRefName,headRefOid,headRepository,headRepositoryOwner,mergeable,mergeStateStatus,files)
     state=$(jq -r '.state' <<<"$pr")
     draft=$(jq -r '.isDraft' <<<"$pr")
     author=$(jq -r '.author.login // ""' <<<"$pr")
@@ -111,6 +111,12 @@ for number in "${prs[@]}"; do
 
     if [[ "$state" != "OPEN" || "$draft" != "false" || "$author" != "$owner" || "$base" != "main" || "$head_repo" != "$repo" || "$head_owner" != "$owner" ]]; then
         echo "Skipping PR #${number}: it is not an open, ready, same-repository owner PR targeting main."
+        continue
+    fi
+
+    body=$(jq -r '.body // ""' <<<"$pr")
+    if ! grep -Fq -- '[x] I reviewed source provenance and license attribution for this change.' <<<"$body"; then
+        echo "Skipping PR #${number}: the source/license provenance attestation is not checked."
         continue
     fi
 

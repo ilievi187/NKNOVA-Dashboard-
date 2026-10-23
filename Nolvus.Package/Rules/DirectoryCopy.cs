@@ -147,10 +147,28 @@ namespace Nolvus.Package.Rules
                 string localPath = Path.GetRelativePath(src, file);
                 localPath = NormalizePath(localPath);
 
-                string targetPath = Path.Combine(dst, localPath);
+                if (!PathResolver.TryResolvePathUnderRoot(src, localPath, out string sourcePath))
+                {
+                    ServiceSingleton.Logger?.Log(
+                        $"DirectoryCopy skipped source file outside its root: {localPath}"
+                    );
+                    continue;
+                }
 
-                Directory.CreateDirectory(Path.GetDirectoryName(targetPath));
-                File.Copy(file, targetPath, true);
+                if (!PathResolver.TryResolvePathUnderRoot(dst, localPath, out string targetPath))
+                {
+                    ServiceSingleton.Logger?.Log(
+                        $"DirectoryCopy skipped destination file outside its root: {localPath}"
+                    );
+                    continue;
+                }
+
+                string? targetDirectory = Path.GetDirectoryName(targetPath);
+                if (string.IsNullOrWhiteSpace(targetDirectory))
+                    continue;
+
+                Directory.CreateDirectory(targetDirectory);
+                File.Copy(sourcePath, targetPath, true);
             }
         }
 

@@ -72,6 +72,31 @@ public sealed class PathResolverSymlinkCopyRuleTests : IDisposable
     }
 
     [LinuxFact]
+    public void FileCopy_rejects_destination_file_symlink_outside_mod_root()
+    {
+        File.WriteAllText(Path.Combine(ExtractionDirectory, "source.dat"), "payload");
+        string externalFile = Path.Combine(ExternalDirectory, "linked.dat");
+        File.WriteAllText(externalFile, "original");
+        File.CreateSymbolicLink(Path.Combine(ModDirectory, "linked.dat"), externalFile);
+
+        var document = LoadRule(
+            """
+            <Rule>
+              <Source>source.dat</Source>
+              <Destination>0</Destination>
+              <DestinationDirectory></DestinationDirectory>
+              <NewFileName>linked.dat</NewFileName>
+            </Rule>
+            """
+        );
+        var rule = new FileCopy();
+        rule.Load(document.DocumentElement!);
+        rule.Execute(_root, ExtractionDirectory, ModDirectory, Path.Combine(_root, "instance"));
+
+        Assert.Equal("original", File.ReadAllText(externalFile));
+    }
+
+    [LinuxFact]
     public void DirectoryCopy_rejects_source_directory_symlink_outside_extraction_root()
     {
         string externalSource = Path.Combine(ExternalDirectory, "source");
@@ -119,6 +144,61 @@ public sealed class PathResolverSymlinkCopyRuleTests : IDisposable
         rule.Execute(_root, ExtractionDirectory, ModDirectory, Path.Combine(_root, "instance"));
 
         Assert.False(File.Exists(Path.Combine(ExternalDirectory, "payload.dat")));
+    }
+
+    [LinuxFact]
+    public void DirectoryCopy_rejects_nested_destination_directory_symlink_outside_mod_root()
+    {
+        string sourceDirectory = Path.Combine(ExtractionDirectory, "source", "nested");
+        Directory.CreateDirectory(sourceDirectory);
+        File.WriteAllText(Path.Combine(sourceDirectory, "payload.dat"), "payload");
+
+        string destinationDirectory = Path.Combine(ModDirectory, "safe");
+        Directory.CreateDirectory(destinationDirectory);
+        Directory.CreateSymbolicLink(Path.Combine(destinationDirectory, "nested"), ExternalDirectory);
+
+        var document = LoadRule(
+            """
+            <Rule>
+              <Source>source</Source>
+              <Destination>0</Destination>
+              <DestinationDirectory>safe</DestinationDirectory>
+              <IncludeRootDirectory>false</IncludeRootDirectory>
+            </Rule>
+            """
+        );
+        var rule = new DirectoryCopy();
+        rule.Load(document.DocumentElement!);
+        rule.Execute(_root, ExtractionDirectory, ModDirectory, Path.Combine(_root, "instance"));
+
+        Assert.False(File.Exists(Path.Combine(ExternalDirectory, "payload.dat")));
+    }
+
+    [LinuxFact]
+    public void DirectoryCopy_rejects_nested_source_directory_symlink_outside_extraction_root()
+    {
+        string sourceDirectory = Path.Combine(ExtractionDirectory, "source");
+        string externalSource = Path.Combine(ExternalDirectory, "linked");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(externalSource);
+        File.WriteAllText(Path.Combine(externalSource, "payload.dat"), "outside");
+        Directory.CreateSymbolicLink(Path.Combine(sourceDirectory, "linked"), externalSource);
+
+        var document = LoadRule(
+            """
+            <Rule>
+              <Source>source</Source>
+              <Destination>0</Destination>
+              <DestinationDirectory>safe</DestinationDirectory>
+              <IncludeRootDirectory>false</IncludeRootDirectory>
+            </Rule>
+            """
+        );
+        var rule = new DirectoryCopy();
+        rule.Load(document.DocumentElement!);
+        rule.Execute(_root, ExtractionDirectory, ModDirectory, Path.Combine(_root, "instance"));
+
+        Assert.False(File.Exists(Path.Combine(ModDirectory, "safe", "linked", "payload.dat")));
     }
 
     public void Dispose()

@@ -1,21 +1,14 @@
 name: ExecutableResolver CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
       - task/executable-resolver-tests
-    paths:
-      - Nolvus.Core/Utils/ExecutableResolver.cs
-      - Nolvus.Core.Tests/**
-      - .github/workflows/nolvus-core-tests.yml
   pull_request:
     branches:
       - main
-    paths:
-      - Nolvus.Core/Utils/ExecutableResolver.cs
-      - Nolvus.Core.Tests/**
-      - .github/workflows/nolvus-core-tests.yml
 
 permissions:
   contents: read

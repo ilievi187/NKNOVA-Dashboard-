@@ -1,6 +1,7 @@
 name: NKNOVA CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -18,6 +19,7 @@ on:
       - opened
       - synchronize
       - reopened
+      - ready_for_review
 
 permissions:
   contents: read
@@ -45,6 +47,41 @@ jobs:
           dotnet-version: 9.0.x
       - name: Run package tests
         run: dotnet test Nolvus.Package.Tests/Nolvus.Package.Tests.csproj --configuration Release --logger "console;verbosity=detailed"
+
+  services-redaction:
+    name: Services redaction regression (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 9.0.x
+      - name: Prevent removal of an adopted redaction regression project
+        if: ${{ github.event_name == 'pull_request' && hashFiles('Nolvus.Services.Tests/Nolvus.Services.Tests.csproj') == '' }}
+        shell: bash
+        run: |
+          git fetch origin "$GITHUB_BASE_REF" --no-tags
+          if git cat-file -e "origin/${GITHUB_BASE_REF}:Nolvus.Services.Tests/Nolvus.Services.Tests.csproj" 2>/dev/null; then
+            echo "This PR removed the already-adopted redaction regression project." >&2
+            exit 1
+          fi
+          echo "The base branch has not yet adopted the focused redaction test project."
+      - name: Run URL redaction regression when the focused test project is present
+        if: ${{ hashFiles('Nolvus.Services.Tests/Nolvus.Services.Tests.csproj') != '' }}
+        run: dotnet run --project Nolvus.Services.Tests/Nolvus.Services.Tests.csproj --configuration Release
+      - name: Report that no focused redaction project exists on this commit yet
+        if: ${{ hashFiles('Nolvus.Services.Tests/Nolvus.Services.Tests.csproj') == '' }}
+        run: echo "No Nolvus.Services.Tests project is present in this commit."
 
   linux-release:
     name: Linux solution build and package

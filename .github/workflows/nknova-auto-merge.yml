@@ -1,0 +1,44 @@
+name: NKNOVA Trusted Auto Merge
+
+on:
+  workflow_run:
+    workflows:
+      - NKNOVA CI
+      - NKNOVA Security Gates
+      - ExecutableResolver CI
+    types:
+      - completed
+  schedule:
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nknova-serial-main-merge
+  cancel-in-progress: false
+
+jobs:
+  merge-trusted-prs:
+    if: ${{ github.event_name == 'schedule' || (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success') }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      checks: read
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out trusted main automation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Process eligible owner PRs serially with main health gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TRIGGER_EVENT: ${{ github.event_name }}
+          UPSTREAM_EVENT: ${{ github.event.workflow_run.event || '' }}
+          UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion || '' }}
+          NKNOVA_AUTO_MERGE_DRY_RUN: 'false'
+        run: bash .github/scripts/nknova-auto-merge.sh

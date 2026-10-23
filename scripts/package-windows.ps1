@@ -112,6 +112,9 @@ if (-not (Test-Path -LiteralPath $appHost -PathType Leaf)) {
 if (Test-Path -LiteralPath (Join-Path $publishDirectory 'NolvusUpdater.exe')) {
     throw 'The upstream Nolvus updater must not be included in a NKNOVA release.'
 }
+if (Test-Path -LiteralPath (Join-Path $publishDirectory 'NolvusLauncher.exe')) {
+    throw 'The unused upstream Nolvus launcher executable must not be embedded in a NKNOVA release.'
+}
 
 $unexpectedFiles = Get-ChildItem -LiteralPath $publishDirectory -Recurse -File |
     Where-Object { $_.Extension -in @('.pdb', '.esp', '.esm', '.bsa') -or $_.Name -eq 'SkyrimSE.exe' }
@@ -136,7 +139,7 @@ try {
             throw "Unsafe path in Windows archive: $entry"
         }
     }
-    if ($entries | Where-Object { $_ -match '\.pdb$|\.esp$|\.esm$|\.bsa$|(^|/)SkyrimSE\.exe$' }) {
+    if ($entries | Where-Object { $_ -match '\.pdb$|\.esp$|\.esm$|\.bsa$|(^|/)SkyrimSE\.exe$|(^|/)NolvusLauncher\.exe$' }) {
         throw 'The Windows release archive contains debug symbols or game data.'
     }
 }

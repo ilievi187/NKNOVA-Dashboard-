@@ -94,7 +94,7 @@ jobs:
           artifact="$RUNNER_TEMP/nknova-linux-dist/NKNOVA-Linux-${VERSION}.tar.gz"
           gzip -t "$artifact"
           tar -tzf "$artifact" > "$RUNNER_TEMP/nknova-linux-files.txt"
-          if grep -E '(^/|(^|/)\.\.(/|$)|NolvusUpdater|\.pdb$|\.esp$|\.esm$|\.bsa$|(^|/)SkyrimSE\.exe$)' "$RUNNER_TEMP/nknova-linux-files.txt"; then
+          if grep -E '(^/|(^|/)\.\.(/|$)|NolvusUpdater|NolvusLauncher\.exe|\.pdb$|\.esp$|\.esm$|\.bsa$|(^|/)SkyrimSE\.exe$)' "$RUNNER_TEMP/nknova-linux-files.txt"; then
             echo 'Unexpected unsafe path, updater, debug symbol, or game data in Linux archive.' >&2
             exit 1
           fi
@@ -218,7 +218,7 @@ jobs:
           tar -tzf "NKNOVA-Linux-${version}.tar.gz" > linux-files.txt
           unzip -t "NKNOVA-Windows-${version}.zip"
           unzip -Z1 "NKNOVA-Windows-${version}.zip" > windows-files.txt
-          if grep -E '(^/|(^|/)\.\.(/|$)|NolvusUpdater|\.pdb$|\.esp$|\.esm$|\.bsa$|(^|/)SkyrimSE\.exe$)' linux-files.txt windows-files.txt; then
+          if grep -E '(^/|(^|/)\.\.(/|$)|NolvusUpdater|NolvusLauncher\.exe|\.pdb$|\.esp$|\.esm$|\.bsa$|(^|/)SkyrimSE\.exe$)' linux-files.txt windows-files.txt; then
             echo 'Release archive contains a risky path, updater, debug symbol, or game data.' >&2
             exit 1
           fi

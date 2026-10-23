@@ -21,6 +21,7 @@ required_checks=(
     "Package tests (ubuntu-latest)"
     "Package tests (windows-latest)"
     "Linux solution build and package"
+    "Linux solution test, build and package"
     "ExecutableResolver tests (ubuntu-latest)"
     "ExecutableResolver tests (windows-latest)"
     "Redaction regression (ubuntu-latest)"

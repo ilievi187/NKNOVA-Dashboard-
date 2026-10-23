@@ -126,6 +126,44 @@ public sealed class DirectoryCopyRuleTests : IDisposable
         Assert.False(File.Exists(Path.Combine(destinationDirectory, "root.dat")));
     }
 
+    [Fact]
+    public void In_root_parent_segment_resolves_without_using_flat_archive_fallback()
+    {
+        string extractionDirectory = Path.Combine(_temporaryDirectory, "extract");
+        string nestedDirectory = Path.Combine(extractionDirectory, "nested");
+        string sourceDirectory = Path.Combine(extractionDirectory, "source");
+        string modDirectory = Path.Combine(_temporaryDirectory, "mods");
+        string destinationFile = Path.Combine(modDirectory, "safe", "payload.dat");
+
+        Directory.CreateDirectory(nestedDirectory);
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(modDirectory);
+        File.WriteAllText(Path.Combine(sourceDirectory, "payload.dat"), "payload");
+
+        var document = new XmlDocument();
+        document.LoadXml(
+            """
+            <Rule>
+              <Source>nested/../source</Source>
+              <Destination>0</Destination>
+              <DestinationDirectory>safe</DestinationDirectory>
+              <IncludeRootDirectory>false</IncludeRootDirectory>
+            </Rule>
+            """
+        );
+
+        var rule = new DirectoryCopy();
+        rule.Load(document.DocumentElement!);
+        rule.Execute(
+            Path.Combine(_temporaryDirectory, "game"),
+            extractionDirectory,
+            modDirectory,
+            Path.Combine(_temporaryDirectory, "instance")
+        );
+
+        Assert.Equal("payload", File.ReadAllText(destinationFile));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_temporaryDirectory))

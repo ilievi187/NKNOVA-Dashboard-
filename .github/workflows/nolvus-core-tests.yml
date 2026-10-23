@@ -3,6 +3,7 @@ name: ExecutableResolver CI
 on:
   push:
     branches:
+      - main
       - task/executable-resolver-tests
     paths:
       - Nolvus.Core/Utils/ExecutableResolver.cs

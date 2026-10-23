@@ -1,0 +1,66 @@
+name: ExecutableResolver CI
+
+on:
+  push:
+    branches:
+      - task/executable-resolver-tests
+    paths:
+      - Nolvus.Core/Utils/ExecutableResolver.cs
+      - Nolvus.Core.Tests/**
+      - .github/workflows/nolvus-core-tests.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Nolvus.Core/Utils/ExecutableResolver.cs
+      - Nolvus.Core.Tests/**
+      - .github/workflows/nolvus-core-tests.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: executable-resolver-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests:
+    name: ExecutableResolver tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 9.0.x
+      - name: Run focused resolver tests
+        run: dotnet test Nolvus.Core.Tests/Nolvus.Core.Tests.csproj --configuration Release --logger "console;verbosity=detailed"
+
+  linux-solution:
+    name: Linux solution test, build and package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 9.0.x
+      - name: Test the existing solution
+        run: dotnet test "Nolvus Dashboard Linux.sln" --configuration Release
+      - name: Build the existing solution
+        run: dotnet build "Nolvus Dashboard Linux.sln" --configuration Release --no-restore
+      - name: Package Linux dashboard and updater
+        shell: bash
+        run: |
+          mkdir -p "$HOME/Desktop"
+          ./build.sh
+          version="$(grep -oPm1 '(?<=<Version>)[^<]+' Nolvus.Dashboard/Nolvus.Dashboard.csproj)"
+          test -s "$HOME/Desktop/Binaries-${version}.tar.gz"

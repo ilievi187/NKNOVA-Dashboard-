@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+      - fix/directorycopy-contained-parent-paths
+      - fix/fluorine-linux-permission-guard
       - fix/nolvus-reliability-followup
       - fix/filesize-condition-malformed-xml
       - fix/create-file-path-confinement

@@ -70,7 +70,7 @@ namespace Nolvus.Core.Misc
             string Result = ENBs.GetAvailableENBsForV5().Where(x => x.Name == Name).Select(x => x.Code).FirstOrDefault();
 
             if (Result == null) {
-                Result = ENBs.GetAvailableENBsForV6().Where(x => Name == Name).Select(x => x.Code).FirstOrDefault();
+                Result = ENBs.GetAvailableENBsForV6().Where(x => x.Name == Name).Select(x => x.Code).FirstOrDefault();
             }
 
             return Result;

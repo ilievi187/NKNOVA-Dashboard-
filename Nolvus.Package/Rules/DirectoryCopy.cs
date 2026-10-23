@@ -42,7 +42,11 @@ namespace Nolvus.Package.Rules
                 resolvedSource = extractDir;
             }
             else if (
-                !PathResolver.TryResolvePathUnderRoot(extractDir, normalizedSource, out string normalizedSourceFull)
+                !PathResolver.TryResolvePathUnderRoot(
+                    extractDir,
+                    normalizedSource,
+                    out string normalizedSourceFull
+                )
             )
             {
                 ServiceSingleton.Logger?.Log(

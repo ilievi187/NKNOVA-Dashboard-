@@ -1,0 +1,143 @@
+name: NKNOVA Security Gates
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: read
+
+concurrency:
+  group: nknova-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-rust-source:
+    name: Detect Rust sources
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      has-rust: ${{ steps.detect.outputs.has-rust }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Detect tracked Rust source
+        id: detect
+        shell: bash
+        run: |
+          if find . -type f -name '*.rs' -not -path './.git/*' -print -quit | grep -q .; then
+            echo 'has-rust=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'has-rust=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - actions
+          - csharp
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:${{ matrix.language }}
+
+  codeql-rust:
+    name: CodeQL (rust)
+    needs: detect-rust-source
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: read
+    env:
+      RUST_DETECTION_RESULT: ${{ needs.detect-rust-source.result }}
+      HAS_RUST: ${{ needs.detect-rust-source.outputs.has-rust }}
+    steps:
+      - name: Fail if Rust source detection failed
+        if: env.RUST_DETECTION_RESULT != 'success'
+        run: exit 1
+      - name: Report that Rust analysis is not applicable
+        if: env.RUST_DETECTION_RESULT == 'success' && env.HAS_RUST != 'true'
+        run: echo "No Rust source files are present; CodeQL Rust analysis is not applicable."
+      - name: Check out source
+        if: env.RUST_DETECTION_RESULT == 'success' && env.HAS_RUST == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Initialize CodeQL for Rust
+        if: env.RUST_DETECTION_RESULT == 'success' && env.HAS_RUST == 'true'
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: rust
+          build-mode: none
+          queries: security-extended
+      - name: Perform Rust CodeQL analysis
+        if: env.RUST_DETECTION_RESULT == 'success' && env.HAS_RUST == 'true'
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:rust
+
+  dependency-review:
+    name: Dependency Manifest Gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source and base history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Require manual review for dependency or license manifest changes
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          base=$(git merge-base origin/main "$GITHUB_SHA")
+          changed_paths=$(git diff --name-only "$base" "$GITHUB_SHA")
+          needs_review=false
+
+          while IFS= read -r path; do
+            [[ -n "$path" ]] || continue
+            status=$(git diff --name-status "$base" "$GITHUB_SHA" -- "$path" | awk 'NR == 1 { print $1 }')
+            case "$path" in
+              Nolvus.Services.Tests/Nolvus.Services.Tests.csproj)
+                if [[ "$status" != "A" ]] || grep -Eq '<PackageReference|<PackageVersion|<PackageDownload' "$path"; then
+                  echo "The focused services test project changed its dependency declarations; manual license/advisory review required." >&2
+                  needs_review=true
+                fi
+                ;;
+              *.csproj|*.props|*.targets|*/packages.lock.json|packages.lock.json|*/packages.config|packages.config|*/Cargo.toml|Cargo.toml|*/Cargo.lock|Cargo.lock|NuGet.config|nuget.config|global.json)
+                echo "Dependency manifest changed: ${path}. Manual license/advisory review is required because this fork cannot use GitHub's Dependency Review API." >&2
+                needs_review=true
+                ;;
+            esac
+          done <<<"$changed_paths"
+
+          if [[ "$needs_review" == true ]]; then
+            exit 1
+          fi
+          echo "No third-party dependency manifests changed; no new dependency license or advisory was introduced."

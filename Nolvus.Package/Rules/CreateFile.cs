@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Xml;
+using Nolvus.Package.Utilities;
 
 namespace Nolvus.Package.Rules
 {
@@ -16,17 +17,28 @@ namespace Nolvus.Package.Rules
 
         public override void Execute(string GamePath, string ExtractDir, string ModDir, string InstanceDir)
         {
+            if (Source is < 0 or > 1)
+                return;
+
             if (!CanExecute(GamePath, ModDir))
                 return;
 
-            // Determine base directory
-            string baseDir = (Source == 0) ? ModDir : GamePath;
+            string baseDir = Source == 0 ? ModDir : GamePath;
 
-            // Normalize path relative to base directory
-            string fullPath = Path.Combine(baseDir, Name);
+            if (!PathResolver.TryResolvePathUnderRoot(baseDir, Name, out string fullPath))
+                return;
 
-            // Ensure the directory exists
-            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+            if (
+                PathResolver.TryResolvePathUnderRoot(baseDir, ".", out string fullRoot)
+                && Path.GetRelativePath(fullRoot, fullPath) == "."
+            )
+                return;
+
+            string? targetDirectory = Path.GetDirectoryName(fullPath);
+            if (string.IsNullOrWhiteSpace(targetDirectory))
+                return;
+
+            Directory.CreateDirectory(targetDirectory);
 
             if (!string.IsNullOrEmpty(DefaultText))
             {

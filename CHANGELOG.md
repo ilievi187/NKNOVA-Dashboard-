@@ -1,5 +1,22 @@
 # Change log
 
+## 0.1.0-preview.2 (unpublished draft candidate)
+
+This follow-up candidate supersedes the still-unpublished `v0.1.0-preview.1` draft. It focuses on remote image resource safety and does not change the existing ImageSharp package version.
+
+### Included
+
+- Limits remote image downloads to 16 MiB and 30 seconds, bounds decoded dimensions to 40 million pixels, and decodes only the first frame.
+- Accepts PNG, JPEG, WebP, GIF, and BMP signatures. Unsupported TIFF and other formats are rejected before ImageSharp decoding.
+- Routes account-avatar loading through the guarded image service on a background thread.
+- Adds integration regressions using a local HTTP server for a valid PNG, rejected TIFF, oversized declared responses, and oversized streamed responses without `Content-Length`.
+
+### Limitations
+
+- No complete Nolvus installation was performed.
+- ImageSharp 3.1.12 still requires an approved license before a patched package upgrade.
+- Existing Nolvus/Mega stored passwords still use reversible legacy obfuscation.
+
 ## 0.1.0-preview.1 (unpublished draft)
 
 This is the first NKNOVA preview candidate. It is an unpublished draft for maintainer validation, not a stable or public release.

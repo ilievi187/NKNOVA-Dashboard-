@@ -2,7 +2,7 @@
 
 ## Preview scope
 
-NKNOVA `0.1.0-preview.1` is an unpublished candidate, not a stable release. CI can build Linux x64 and Windows x64 packages, validate archives, run automated tests, and confirm that an extracted application process stays open during a brief startup smoke test. It does not prove that NKNOVA can complete a real Nolvus installation.
+NKNOVA `0.1.0-preview.2` supersedes the unpublished `0.1.0-preview.1` draft. It is not a stable release. CI builds Linux x64 and Windows x64 packages, validates archives, runs automated tests, and confirms that extracted application processes stay open during brief startup smoke tests. It does not prove that NKNOVA can complete a real Nolvus installation.
 
 Do not use your only game/modlist installation for initial testing. Make a backup and, where possible, test with a separate game profile and a separate writable NKNOVA directory. No game files are distributed with NKNOVA.
 
@@ -10,7 +10,7 @@ Do not use your only game/modlist installation for initial testing. Make a backu
 
 1. Install a supported .NET 10 x64 runtime and a desktop session with the libraries required by Avalonia/CEF.
 2. Install Steam and ensure the desired Skyrim Special Edition library is mounted and accessible to your user.
-3. Extract `NKNOVA-Linux-0.1.0-preview.1.tar.gz` into a writable directory owned by your user.
+3. Extract `NKNOVA-Linux-0.1.0-preview.2.tar.gz` into a writable directory owned by your user.
 4. From the extracted directory, start `./Nolvus/NolvusDashboard`.
 5. Check the Dashboard's diagnostics and detected game path. Steam discovery needs a readable `steamapps/libraryfolders.vdf`, the Skyrim Special Edition app manifest (`489830`), and the installed `SkyrimSE.exe`.
 6. Do not run NKNOVA with `sudo`. Use the normal desktop user so Steam, Proton, cache, and configuration paths resolve correctly.
@@ -20,7 +20,7 @@ The inherited Linux workflow can depend on Steam/Proton tools such as `protontri
 ## Windows x64
 
 1. Install a supported .NET 10 x64 runtime.
-2. Extract `NKNOVA-Windows-0.1.0-preview.1.zip` into a writable directory under your user profile.
+2. Extract `NKNOVA-Windows-0.1.0-preview.2.zip` into a writable directory under your user profile.
 3. Start `NolvusDashboard.exe`.
 4. Confirm the detected Steam library and Skyrim Special Edition directory before choosing an install or repair action.
 

@@ -8,7 +8,7 @@ A draft is not a stable release or proof that a full Nolvus installation works. 
 
 ## Versioning and tagging
 
-The Dashboard project version is the source of truth. A release tag must exactly match it with a `v` prefix, for example `v0.1.0-preview.1` for `<Version>0.1.0-preview.1</Version>`. The workflow checks that the tagged commit is an ancestor of `main`, refuses to overwrite an existing release, and creates a draft pre-release only after both platform jobs pass.
+The Dashboard project version is the source of truth. A release tag must exactly match it with a `v` prefix, for example `v0.1.0-preview.2` for `<Version>0.1.0-preview.2</Version>`. The workflow checks that the tagged commit is an ancestor of `main`, refuses to overwrite an existing release, and creates a draft pre-release only after both platform jobs pass. The `v0.1.0-preview.1` draft remains unpublished and is superseded by later preview tags.
 
 Only tag a commit already on protected `main` after its pull request and required checks have passed. Never force-push or retarget a release tag. If a tagged build fails, leave the failed run as evidence and issue a new patch preview tag after fixing the cause.
 

@@ -15,6 +15,12 @@
 - Verify that `SkyrimSE.exe` exists in the game directory. Detection intentionally rejects a manifest-only/incomplete installation.
 - Ensure the Steam library is mounted and readable. Do not move or repair game files just to satisfy detection.
 
+## Remote image or thumbnail is not shown
+
+- Remote images must use PNG, JPEG, WebP, GIF, or BMP signatures. TIFF and other formats are rejected, even if the URL ends in an image extension.
+- Downloads are limited to 16 MiB and 30 seconds. Identified images above 40 million pixels are rejected, and only the first frame is decoded.
+- If an upstream image fails these limits, use an appropriately resized PNG/JPEG/WebP thumbnail. Do not increase limits or use an untrusted image converter without reviewing its resource and security behavior.
+
 ## Installation, download, or recovery fails
 
 - Stop before retrying if the destination, required disk space, game edition, Nolvus version, or upstream source is uncertain.

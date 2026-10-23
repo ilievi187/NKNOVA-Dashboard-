@@ -36,6 +36,14 @@ namespace Nolvus.Package.Rules
             string normalizedSource = NormalizePath(Source);
             string normalizedDest = NormalizePath(DestinationDirectory);
 
+            if (normalizedSource.Split('/').Any(segment => segment == ".."))
+            {
+                ServiceSingleton.Logger?.Log(
+                    $"DirectoryCopy skipped parent-traversal source: {Source}"
+                );
+                return;
+            }
+
             // ------------------------------------------------------------
             // 1) Try resolving Source path segment-by-segment
             //    Works for: "NetScriptFramework/Plugins", "_core/meshes", etc.
@@ -71,12 +79,19 @@ namespace Nolvus.Package.Rules
             // ------------------------------------------------------------
             // 4) Determine final destination path
             // ------------------------------------------------------------
-            string platformDest = normalizedDest.Replace("/", Path.DirectorySeparatorChar.ToString());
-
-            string finalDestination =
-                CopyToRoot
-                    ? destBase
-                    : Path.Combine(destBase, platformDest);
+            string finalDestination;
+            if (CopyToRoot)
+            {
+                if (!PathResolver.TryResolvePathUnderRoot(destBase, ".", out finalDestination))
+                    return;
+            }
+            else if (!PathResolver.TryResolvePathUnderRoot(destBase, normalizedDest, out finalDestination))
+            {
+                ServiceSingleton.Logger?.Log(
+                    $"DirectoryCopy skipped destination outside its root: {DestinationDirectory}"
+                );
+                return;
+            }
 
             Directory.CreateDirectory(finalDestination);
 

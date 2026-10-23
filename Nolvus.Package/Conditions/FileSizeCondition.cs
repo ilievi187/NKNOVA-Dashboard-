@@ -5,6 +5,7 @@ using System.Text;
 using System.IO;
 using System.Threading.Tasks;
 using System.Xml;
+using Nolvus.Package.Utilities;
 
 namespace Nolvus.Package.Conditions
 {
@@ -33,37 +34,8 @@ namespace Nolvus.Package.Conditions
                 SourceDir = InstallDir;
             }
 
-            if (string.IsNullOrWhiteSpace(SourceDir) || string.IsNullOrWhiteSpace(DataToCompare))
+            if (!PathResolver.TryResolvePathUnderRoot(SourceDir, DataToCompare, out string filePath))
                 return false;
-
-            string relativePath = DataToCompare
-                .Replace('\\', Path.DirectorySeparatorChar)
-                .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
-
-            if (Path.IsPathRooted(relativePath))
-                return false;
-
-            string sourceDirectory;
-            string filePath;
-
-            try
-            {
-                sourceDirectory = Path.GetFullPath(SourceDir);
-                filePath = Path.GetFullPath(Path.Combine(sourceDirectory, relativePath));
-            }
-            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-            {
-                return false;
-            }
-
-            string relativeToSource = Path.GetRelativePath(sourceDirectory, filePath);
-            if (
-                relativeToSource == ".."
-                || relativeToSource.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-            )
-            {
-                return false;
-            }
 
             if (!File.Exists(filePath))
                 return false;

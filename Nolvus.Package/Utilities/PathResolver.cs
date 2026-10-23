@@ -131,5 +131,54 @@ namespace Nolvus.Package.Utilities
                 return current;
             }
 
+        /// <summary>
+        /// Resolves a relative path lexically under a root directory and rejects rooted or
+        /// parent-traversal paths that would escape that root. Symlink targets are not resolved.
+        /// </summary>
+        public static bool TryResolvePathUnderRoot(
+            string rootDirectory,
+            string relativePath,
+            out string resolvedPath
+        )
+        {
+            resolvedPath = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(rootDirectory) || string.IsNullOrWhiteSpace(relativePath))
+                return false;
+
+            string normalizedPath = relativePath
+                .Replace('\\', Path.DirectorySeparatorChar)
+                .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+
+            if (Path.IsPathRooted(normalizedPath))
+                return false;
+
+            try
+            {
+                string fullRoot = Path.GetFullPath(rootDirectory);
+                string candidate = Path.GetFullPath(Path.Combine(fullRoot, normalizedPath));
+                string relativeToRoot = Path.GetRelativePath(fullRoot, candidate);
+
+                if (
+                    Path.IsPathRooted(relativeToRoot)
+                    || relativeToRoot == ".."
+                    || relativeToRoot.StartsWith(
+                        ".." + Path.DirectorySeparatorChar,
+                        StringComparison.Ordinal
+                    )
+                )
+                {
+                    return false;
+                }
+
+                resolvedPath = candidate;
+                return true;
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                return false;
+            }
+        }
+
     }
 }

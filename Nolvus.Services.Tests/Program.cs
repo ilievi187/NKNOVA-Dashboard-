@@ -1,7 +1,13 @@
 using System;
+using System.Buffers.Binary;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading.Tasks;
 using Nolvus.Services.Files;
 using Nolvus.Services.Game;
+using Nolvus.Services.Lib;
 
 internal static class Program
 {
@@ -41,9 +47,11 @@ internal static class Program
             throw new Exception("FAILED: malformed URL was not fully redacted");
 
         RunSteamLibraryDetectionRegression();
+        RunRemoteImageLoaderRegression();
 
         Console.WriteLine("PASS: signed and malformed download URLs are safely logged.");
         Console.WriteLine("PASS: Steam discovery validates complete secondary libraries and rejects incomplete or traversing installs.");
+        Console.WriteLine("PASS: remote images enforce supported format, response-byte, and decoded-pixel limits.");
         return 0;
     }
 
@@ -93,6 +101,162 @@ internal static class Program
         {
             temporaryRoot.Delete(recursive: true);
         }
+    }
+
+    private static void RunRemoteImageLoaderRegression()
+    {
+        var service = new LibService();
+        var pngBytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVQI12P4//8/AAX+Av7czFnnAAAAAElFTkSuQmCC");
+        var supportedImageResponse = StartLocalImageServer(pngBytes);
+        using (var image = service.GetImageFromUrl(supportedImageResponse.Url))
+        {
+            if (image.Width != 1 || image.Height != 1)
+                throw new Exception("FAILED: supported PNG image did not decode through LibService.");
+        }
+        supportedImageResponse.ServerTask.GetAwaiter().GetResult();
+
+        var unsupportedImageResponse = StartLocalImageServer(new byte[] { (byte)'I', (byte)'I', 42, 0 });
+        AssertRemoteImageRejected(
+            () => service.GetImageFromWebStream(unsupportedImageResponse.Url),
+            "unsupported TIFF signature");
+        unsupportedImageResponse.ServerTask.GetAwaiter().GetResult();
+
+        var oversizedImageResponse = StartLocalImageServer(
+            Array.Empty<byte>(),
+            contentLength: (16 * 1024 * 1024) + 1,
+            sendBody: false);
+        AssertRemoteImageRejected(
+            () => service.GetImageFromUrl(oversizedImageResponse.Url),
+            "oversized Content-Length");
+        oversizedImageResponse.ServerTask.GetAwaiter().GetResult();
+
+        var streamedOversizedImageResponse = StartLocalImageServer(
+            new byte[(16 * 1024 * 1024) + 1],
+            sendBody: true,
+            includeContentLength: false);
+        AssertRemoteImageRejected(
+            () => service.GetImageFromUrl(streamedOversizedImageResponse.Url),
+            "oversized response without Content-Length");
+        streamedOversizedImageResponse.ServerTask.GetAwaiter().GetResult();
+
+        var oversizedDimensionsResponse = StartLocalImageServer(CreateOversizedRle8Bmp());
+        AssertRemoteImageRejected(
+            () => service.GetImageFromUrl(oversizedDimensionsResponse.Url),
+            "image over the pixel limit");
+        oversizedDimensionsResponse.ServerTask.GetAwaiter().GetResult();
+    }
+
+    private static byte[] CreateOversizedRle8Bmp()
+    {
+        const int width = 7000;
+        const int height = 7000;
+        const int bitmapHeaderSize = 14 + 40 + (256 * 4);
+        using var encodedPixels = new MemoryStream();
+        for (var row = 0; row < height; row++)
+        {
+            var remaining = width;
+            while (remaining > 0)
+            {
+                var runLength = Math.Min(byte.MaxValue, remaining);
+                encodedPixels.WriteByte((byte)runLength);
+                encodedPixels.WriteByte(0);
+                remaining -= runLength;
+            }
+
+            encodedPixels.WriteByte(0);
+            encodedPixels.WriteByte(0);
+        }
+
+        encodedPixels.WriteByte(0);
+        encodedPixels.WriteByte(1);
+        var pixelData = encodedPixels.ToArray();
+        var bitmap = new byte[bitmapHeaderSize + pixelData.Length];
+        bitmap[0] = (byte)'B';
+        bitmap[1] = (byte)'M';
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(2, 4), bitmap.Length);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(10, 4), bitmapHeaderSize);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(14, 4), 40);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(18, 4), width);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(22, 4), height);
+        BinaryPrimitives.WriteInt16LittleEndian(bitmap.AsSpan(26, 2), 1);
+        BinaryPrimitives.WriteInt16LittleEndian(bitmap.AsSpan(28, 2), 8);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(30, 4), 1);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(34, 4), pixelData.Length);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(46, 4), 256);
+        pixelData.CopyTo(bitmap, bitmapHeaderSize);
+        return bitmap;
+    }
+
+    private static (string Url, Task ServerTask) StartLocalImageServer(
+        byte[] body,
+        long? contentLength = null,
+        bool sendBody = true,
+        bool includeContentLength = true)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var endpoint = (IPEndPoint)listener.LocalEndpoint;
+        var url = $"http://127.0.0.1:{endpoint.Port}/image";
+        var serverTask = Task.Run(async () =>
+        {
+            try
+            {
+                using var client = await listener.AcceptTcpClientAsync().ConfigureAwait(false);
+                using var stream = client.GetStream();
+                using var reader = new StreamReader(stream, Encoding.ASCII, false, 1024, leaveOpen: true);
+
+                string? line;
+                do
+                {
+                    line = await reader.ReadLineAsync().ConfigureAwait(false);
+                } while (!string.IsNullOrEmpty(line));
+
+                var responseLength = contentLength ?? body.LongLength;
+                var lengthHeader = includeContentLength ? $"Content-Length: {responseLength}\r\n" : string.Empty;
+                var headers = Encoding.ASCII.GetBytes(
+                    $"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n{lengthHeader}Connection: close\r\n\r\n");
+                await stream.WriteAsync(headers).ConfigureAwait(false);
+                if (sendBody && body.Length > 0)
+                {
+                    try
+                    {
+                        await stream.WriteAsync(body).ConfigureAwait(false);
+                        await stream.FlushAsync().ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (!includeContentLength && (ex is IOException or SocketException))
+                    {
+                        // The bounded client can close the connection after reaching its read limit.
+                    }
+                }
+            }
+            finally
+            {
+                listener.Stop();
+            }
+        });
+
+        return (url, serverTask);
+    }
+
+    private static void AssertRemoteImageRejected(Func<IDisposable> loadImage, string scenario)
+    {
+        IDisposable? image = null;
+        var rejected = false;
+        try
+        {
+            image = loadImage();
+        }
+        catch (InvalidDataException)
+        {
+            rejected = true;
+        }
+        finally
+        {
+            image?.Dispose();
+        }
+
+        if (!rejected)
+            throw new Exception($"FAILED: remote image loader accepted {scenario}.");
     }
 
     private static string CaptureDownloadUrlLog(string url)

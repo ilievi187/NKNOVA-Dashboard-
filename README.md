@@ -12,7 +12,9 @@ NKNOVA is a GPL-3.0-licensed community fork of the Avalonia-based Nolvus Dashboa
 - Linux and Windows package jobs validate the package contents and perform a short extracted-app startup smoke test.
 - Steam discovery checks the Skyrim Special Edition app manifest and the presence of `SkyrimSE.exe`; Linux Steam and Windows Steam discovery use platform-specific roots.
 - File-copy path checks, URL-log redaction, malformed-rule behavior, and selected service behavior have automated regression coverage.
-- NKNOVA's automatic updater is disabled. The preview does not call the upstream `sableeyed/NolvusDashboard` updater or ship `NolvusUpdater`. Install updates manually from a verified NKNOVA package.
+- Remote thumbnail downloads are capped at 16 MiB and 30 seconds. The preview accepts PNG, JPEG, WebP, GIF, and BMP, caps decoded images at 40 million pixels, and decodes only the first frame. Unsupported TIFF/other formats and oversized files are rejected to bound memory use.
+- The inherited upstream updater is disabled and not packaged. Install later NKNOVA versions manually from a verified release.
+- The `LibService` API remains synchronous. Current UI callers move network decoding into background tasks with bounded concurrency; future callers must not invoke it directly on the UI thread.
 
 ## Not verified or not included
 
@@ -26,14 +28,14 @@ NKNOVA is a GPL-3.0-licensed community fork of the Avalonia-based Nolvus Dashboa
 
 ## Downloads
 
-The first candidate is `v0.1.0-preview.1`. The release workflow can build and verify Linux/Windows assets and create an **unpublished GitHub draft pre-release**. It must not be published publicly while the ImageSharp advisory/license gate and full real-install validation remain unresolved. Check [GitHub Releases](https://github.com/ilievi187/NKNOVA-Dashboard-/releases) for release status.
+The current candidate is `v0.1.0-preview.2`, which supersedes the unpublished `v0.1.0-preview.1` draft. The release workflow builds and verifies Linux/Windows assets and creates an **unpublished GitHub draft pre-release**. It must not be published publicly while the ImageSharp advisory/license gate and full real-install validation remain unresolved. Check [GitHub Releases](https://github.com/ilievi187/NKNOVA-Dashboard-/releases) for release status.
 
 Release assets are x64 framework-dependent packages, with SHA-256 files. Install the .NET 10 runtime before launching. If a runtime is missing, install the .NET 10 Desktop Runtime on Windows or the .NET 10 runtime package for your Linux distribution. Keep the extracted folder writable because the current application writes local settings, logs, and cache data relative to its application directory.
 
 ### Linux
 
 1. Install a current .NET 10 x64 runtime, Steam, and the external tools required by the particular Proton workflow you intend to use.
-2. Extract `NKNOVA-Linux-0.1.0-preview.1.tar.gz` to a user-writable directory, not `/usr` or another protected location.
+2. Extract `NKNOVA-Linux-0.1.0-preview.2.tar.gz` to a user-writable directory, not `/usr` or another protected location.
 3. Run `./Nolvus/NolvusDashboard` from the extracted package.
 4. Review diagnostics and verify the detected game path before starting any installation or repair action.
 
@@ -42,7 +44,7 @@ Do not run the application with `sudo`. Keep your existing Steam library and mod
 ### Windows
 
 1. Install a current .NET 10 x64 runtime.
-2. Extract `NKNOVA-Windows-0.1.0-preview.1.zip` to a user-writable directory.
+2. Extract `NKNOVA-Windows-0.1.0-preview.2.zip` to a user-writable directory.
 3. Run `NolvusDashboard.exe`.
 4. Confirm Skyrim Special Edition is detected correctly before using installation or repair actions.
 

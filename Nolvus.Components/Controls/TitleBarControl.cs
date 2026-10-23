@@ -279,9 +279,7 @@ namespace Nolvus.Components.Controls
         {
             try
             {
-                using var http = new HttpClient();
-                using var stream = await http.GetStreamAsync(url);
-                using var img = SixLabors.ImageSharp.Image.Load(stream);
+                using var img = await Task.Run(() => ServiceSingleton.Lib.GetImageFromUrl(url));
                 await (ApplyImage(img));
             }
             catch (Exception ex)

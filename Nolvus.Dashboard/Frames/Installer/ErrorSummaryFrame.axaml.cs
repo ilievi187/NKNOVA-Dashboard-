@@ -7,12 +7,17 @@ using Nolvus.Core.Enums;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Nolvus.Dashboard.Controls;
+using Avalonia.Threading;
 using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Nolvus.Dashboard.Frames.Installer
 {
     public partial class ErrorSummaryFrame : DashboardFrame
     {
+        private static readonly SemaphoreSlim ImageDownloadSlots = new(2);
+
         public ErrorSummaryFrame(IDashboard Dashboard, FrameParameters Params) :base(Dashboard, Params)
         {
             InitializeComponent();
@@ -65,29 +70,35 @@ namespace Nolvus.Dashboard.Frames.Installer
         {
             ErrorsList.Children.Clear();
 
-            foreach (var faulty in ServiceSingleton.Packages.ErrorHandler.List)
+            foreach (var faulty in ServiceSingleton.Packages.ErrorHandler.List.ToList())
             {
                 var panel = new ErrorPanel
                 {
                     ModName = faulty.Mod.Name,
                     ErrorText = faulty.Error.Message
                 };
-
-                try
-                {
-                    if (!string.IsNullOrWhiteSpace(faulty.Mod.ImagePath))
-                    {
-                        var img = ServiceSingleton.Lib.GetImageFromWebStream(faulty.Mod.ImagePath);
-                        panel.SetImage(img);
-                    }
-                    else
-                    {
-                        var fallback = ServiceSingleton.Lib.GetImageFromWebStream("default");
-                        panel.SetImage(fallback);
-                    }
-                }
-                catch { }
                 ErrorsList.Children.Add(panel);
+
+                if (!string.IsNullOrWhiteSpace(faulty.Mod.ImagePath))
+                    _ = LoadErrorImageAsync(panel, faulty.Mod.ImagePath);
+            }
+        }
+
+        private static async Task LoadErrorImageAsync(ErrorPanel panel, string imageUrl)
+        {
+            await ImageDownloadSlots.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                using var image = await Task.Run(() => ServiceSingleton.Lib.GetImageFromWebStream(imageUrl)).ConfigureAwait(false);
+                await Dispatcher.UIThread.InvokeAsync(() => panel.SetImage(image));
+            }
+            catch (Exception ex)
+            {
+                ServiceSingleton.Logger.Log("Error thumbnail load failed: " + ex.Message);
+            }
+            finally
+            {
+                ImageDownloadSlots.Release();
             }
         }
     }

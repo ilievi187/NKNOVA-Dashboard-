@@ -36,19 +36,32 @@ namespace Nolvus.Package.Rules
             string normalizedSource = NormalizePath(Source);
             string normalizedDest = NormalizePath(DestinationDirectory);
 
-            if (normalizedSource.Split('/').Any(segment => segment == ".."))
+            string? resolvedSource;
+            if (string.IsNullOrWhiteSpace(normalizedSource))
+            {
+                resolvedSource = extractDir;
+            }
+            else if (
+                !PathResolver.TryResolvePathUnderRoot(extractDir, normalizedSource, out string normalizedSourceFull)
+            )
             {
                 ServiceSingleton.Logger?.Log(
-                    $"DirectoryCopy skipped parent-traversal source: {Source}"
+                    $"DirectoryCopy skipped source outside extraction root: {Source}"
                 );
                 return;
             }
+            else
+            {
+                string normalizedSourceRelative = Path.GetRelativePath(
+                    Path.GetFullPath(extractDir),
+                    normalizedSourceFull
+                );
 
-            // ------------------------------------------------------------
-            // 1) Try resolving Source path segment-by-segment
-            //    Works for: "NetScriptFramework/Plugins", "_core/meshes", etc.
-            // ------------------------------------------------------------
-            string? resolvedSource = PathResolver.ResolvePathSegments(extractDir, normalizedSource);
+                // Resolve segment-by-segment to preserve case-insensitive archive matching.
+                resolvedSource = normalizedSourceRelative == "."
+                    ? extractDir
+                    : PathResolver.ResolvePathSegments(extractDir, normalizedSourceRelative);
+            }
 
             // ------------------------------------------------------------
             // 2) Fallback for FLAT archives (files directly at extract root)

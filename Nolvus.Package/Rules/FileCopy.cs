@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Xml;
 using Nolvus.Core.Services;
+using Nolvus.Package.Utilities;
 
 namespace Nolvus.Package.Rules
 {
@@ -33,20 +34,17 @@ namespace Nolvus.Package.Rules
             string srcRel = Normalize(Source);
             string destRel = Normalize(DestinationDirectory);
 
-            // Convert to platform separators
-            string destRelPlatform =
-                destRel.Replace("/", Path.DirectorySeparatorChar.ToString());
-
             // Pick destination base
             string destBase =
                 Destination == 0 ? modDir :
                 Destination == 1 ? gamePath :
                 instanceDir;
 
-            // Resolve full source path
-            // Convert to platform separators:
-            string srcPlatform = srcRel.Replace("/", Path.DirectorySeparatorChar.ToString());
-            string sourceFull = Path.Combine(extractDir, srcPlatform);
+            if (!PathResolver.TryResolvePathUnderRoot(extractDir, srcRel, out string sourceFull))
+            {
+                ServiceSingleton.Logger.Log($"[FileCopy] Skipping source outside extraction root: {Source}");
+                return;
+            }
 
             if (!File.Exists(sourceFull))
             {
@@ -54,11 +52,21 @@ namespace Nolvus.Package.Rules
                 return;
             }
 
-            // Determine actual directory to copy into
-            string targetDir = CopyToRoot
-                ? destBase
-                : Path.Combine(destBase, destRelPlatform);
+            string targetDir;
+            if (CopyToRoot)
+            {
+                if (!PathResolver.TryResolvePathUnderRoot(destBase, ".", out targetDir))
+                    return;
+            }
+            else if (!PathResolver.TryResolvePathUnderRoot(destBase, destRel, out targetDir))
+            {
+                ServiceSingleton.Logger.Log(
+                    $"[FileCopy] Skipping destination outside its root: {DestinationDirectory}"
+                );
+                return;
+            }
 
+            // Determine actual directory to copy into
             Directory.CreateDirectory(targetDir);
 
             // Determine final filename
@@ -66,9 +74,17 @@ namespace Nolvus.Package.Rules
                 ? Normalize(NewFileName)
                 : Path.GetFileName(sourceFull);
 
-            finalName = finalName.Replace("/", Path.DirectorySeparatorChar.ToString());
+            if (!PathResolver.TryResolvePathUnderRoot(targetDir, finalName, out string destFull))
+            {
+                ServiceSingleton.Logger.Log($"[FileCopy] Skipping destination file outside its root: {NewFileName}");
+                return;
+            }
 
-            string destFull = Path.Combine(targetDir, finalName);
+            string? finalDirectory = Path.GetDirectoryName(destFull);
+            if (string.IsNullOrWhiteSpace(finalDirectory))
+                return;
+
+            Directory.CreateDirectory(finalDirectory);
 
             // Perform the copy
             File.Copy(sourceFull, destFull, overwrite: true);

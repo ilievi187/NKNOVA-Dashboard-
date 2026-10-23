@@ -26,10 +26,11 @@ required_checks=(
     "ExecutableResolver tests (windows-latest)"
     "Services redaction regression (ubuntu-latest)"
     "Services redaction regression (windows-latest)"
+    "Detect Rust sources"
     "CodeQL (actions)"
     "CodeQL (csharp)"
     "CodeQL (rust)"
-    "Dependency Review"
+    "Dependency Manifest Gate"
 )
 
 ensure_main_healthy() {
@@ -157,6 +158,10 @@ for number in "${prs[@]}"; do
             ([.check_runs[] | select(.name == $name)] | sort_by(.started_at // .created_at // "") | last // {}) as $check
             | if $check.status == "completed" then ($check.conclusion // "") else ($check.status // "missing") end
         ' <<<"$checks")
+        if [[ "$context" == "CodeQL (rust)" && "$check_state" == "skipped" ]]; then
+            echo "CodeQL Rust check is skipped because the successful detection job found no Rust sources."
+            continue
+        fi
         if [[ "$check_state" != "success" ]]; then
             echo "PR #${number} is waiting for required check '${context}' (state=${check_state})."
             ready=false

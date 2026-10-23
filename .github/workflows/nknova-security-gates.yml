@@ -19,8 +19,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  detect-rust-source:
+    name: Detect Rust sources
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      has-rust: ${{ steps.detect.outputs.has-rust }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Detect tracked Rust source
+        id: detect
+        shell: bash
+        run: |
+          if find . -type f -name '*.rs' -not -path './.git/*' -print -quit | grep -q .; then
+            echo 'has-rust=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'has-rust=false' >> "$GITHUB_OUTPUT"
+          fi
+
   codeql:
     name: CodeQL (${{ matrix.language }})
+    needs: detect-rust-source
+    if: ${{ matrix.language != 'rust' || needs.detect-rust-source.outputs.has-rust == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -48,29 +70,42 @@ jobs:
           category: /language:${{ matrix.language }}
 
   dependency-review:
-    name: Dependency Review
+    name: Dependency Manifest Gate
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
     steps:
-      - name: Review dependency changes for new vulnerabilities and licenses
-        id: dependency-review
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+      - name: Check out source and base history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fail-on-severity: low
-          fail-on-scopes: runtime,development,unknown
-          allow-licenses: Apache-2.0, BSD-2-Clause, BSD-3-Clause, BSL-1.0, CC0-1.0, GPL-3.0-only, GPL-3.0-or-later, ISC, LGPL-3.0-only, LGPL-3.0-or-later, MIT, MPL-2.0, 0BSD, Unlicense
-      - name: Fail when dependency review reports an invalid license change
-        if: always()
-        env:
-          INVALID_LICENSE_CHANGES: ${{ steps.dependency-review.outputs.invalid-license-changes }}
+          fetch-depth: 0
+      - name: Require manual review for dependency or license manifest changes
         run: |
-          if [[ -z "$INVALID_LICENSE_CHANGES" ]]; then
-            exit 0
-          fi
-          if ! jq -e 'type == "array" and length == 0' <<<"$INVALID_LICENSE_CHANGES" >/dev/null; then
-            echo "Dependency review found license changes that require manual review." >&2
+          set -euo pipefail
+          git fetch origin main --no-tags
+          base=$(git merge-base origin/main "$GITHUB_SHA")
+          changed_paths=$(git diff --name-only "$base" "$GITHUB_SHA")
+          needs_review=false
+
+          while IFS= read -r path; do
+            [[ -n "$path" ]] || continue
+            status=$(git diff --name-status "$base" "$GITHUB_SHA" -- "$path" | awk 'NR == 1 { print $1 }')
+            case "$path" in
+              Nolvus.Services.Tests/Nolvus.Services.Tests.csproj)
+                if [[ "$status" != "A" ]] || grep -Eq '<PackageReference|<PackageVersion|<PackageDownload' "$path"; then
+                  echo "The focused services test project changed its dependency declarations; manual license/advisory review required." >&2
+                  needs_review=true
+                fi
+                ;;
+              *.csproj|*.props|*.targets|*/packages.lock.json|packages.lock.json|*/packages.config|packages.config|*/Cargo.toml|Cargo.toml|*/Cargo.lock|Cargo.lock|NuGet.config|nuget.config|global.json)
+                echo "Dependency manifest changed: ${path}. Manual license/advisory review is required because this fork cannot use GitHub's Dependency Review API." >&2
+                needs_review=true
+                ;;
+            esac
+          done <<<"$changed_paths"
+
+          if [[ "$needs_review" == true ]]; then
             exit 1
           fi
+          echo "No third-party dependency manifests changed; no new dependency license or advisory was introduced."

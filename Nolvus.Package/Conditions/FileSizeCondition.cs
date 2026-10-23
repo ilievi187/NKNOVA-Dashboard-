@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
-using System.Threading.Tasks;
 using System.Xml;
 using Nolvus.Package.Utilities;
 
@@ -15,24 +10,24 @@ namespace Nolvus.Package.Conditions
 
         public override void Load(XmlNode Node)
         {
-            base.Load(Node);
-            Source = System.Convert.ToInt16(Node["Source"].InnerText);
+            DataToCompare = Node["DataToCompare"]?.InnerText ?? string.Empty;
+            ValueToCompare = Node["ValueToCompare"]?.InnerText ?? string.Empty;
+            Operator = int.TryParse(Node["Operator"]?.InnerText, out int OperatorValue)
+                ? OperatorValue
+                : -1;
+
+            XmlNode SourceNode = Node["Source"];
+            Source = SourceNode != null && int.TryParse(SourceNode.InnerText, out int SourceValue)
+                ? SourceValue
+                : -1;
         }
 
         public override bool IsValid(string GamePath, string InstallDir)
         {
-            bool Valid = false;
+            if (Source is < 0 or > 1 || Operator is < 0 or > 3)
+                return false;
 
-            string SourceDir = string.Empty;
-
-            if (Source == 1)
-            {
-                SourceDir = GamePath;
-            }
-            else
-            {
-                SourceDir = InstallDir;
-            }
+            string SourceDir = Source == 1 ? GamePath : InstallDir;
 
             if (!PathResolver.TryResolvePathUnderRoot(SourceDir, DataToCompare, out string filePath))
                 return false;
@@ -43,28 +38,21 @@ namespace Nolvus.Package.Conditions
             if (!int.TryParse(ValueToCompare, out int expectedSize))
                 return false;
 
+            if (expectedSize < 0)
+                return false;
+
             FileInfo fileInfo = new FileInfo(filePath);
 
             long Size = fileInfo.Length / 1024;
 
-            switch (this.Operator)
+            return Operator switch
             {
-                case 0:
-                    Valid = Size == expectedSize;
-                    break;
-                case 1:
-                    Valid = Size != expectedSize;
-                    break;
-                case 2:
-                    Valid = Size > expectedSize;
-                    break;
-                case 3:
-                    Valid = Size < expectedSize;
-                    break;
-
-            }
-
-            return Valid;
+                0 => Size == expectedSize,
+                1 => Size != expectedSize,
+                2 => Size > expectedSize,
+                3 => Size < expectedSize,
+                _ => false
+            };
         }
     }
 }

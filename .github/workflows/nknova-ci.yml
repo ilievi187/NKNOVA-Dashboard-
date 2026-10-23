@@ -44,7 +44,7 @@ jobs:
         with:
           dotnet-version: 9.0.x
       - name: Run package tests
-        run: dotnet test Nolvus.Package.Tests/Nolvus.Package.Tests.csproj --configuration Release
+        run: dotnet test Nolvus.Package.Tests/Nolvus.Package.Tests.csproj --configuration Release --logger "console;verbosity=detailed"
 
   linux-release:
     name: Linux solution build and package

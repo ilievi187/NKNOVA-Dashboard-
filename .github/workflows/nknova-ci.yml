@@ -11,6 +11,7 @@ on:
       - fix/create-file-path-confinement
       - fix/modorganizer-ini-executable-selection
       - fix/create-rule-abstract
+      - integration/nknova-backlog-replay-20261023
   pull_request:
     branches:
       - main

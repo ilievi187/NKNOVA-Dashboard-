@@ -33,7 +33,7 @@ jobs:
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
       - name: Run focused resolver tests
         run: dotnet test Nolvus.Core.Tests/Nolvus.Core.Tests.csproj --configuration Release --logger "console;verbosity=detailed"
 
@@ -46,12 +46,12 @@ jobs:
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
       - name: Test the existing solution
         run: dotnet test "Nolvus Dashboard Linux.sln" --configuration Release
       - name: Build the existing solution
         run: dotnet build "Nolvus Dashboard Linux.sln" --configuration Release --no-restore
-      - name: Package Linux dashboard and updater
+      - name: Package Linux dashboard
         shell: bash
         run: |
           mkdir -p "$HOME/Desktop"

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Microsoft.Win32;
 using Nolvus.Core.Interfaces;
 using Nolvus.Core.Misc;
 
@@ -14,40 +15,131 @@ namespace Nolvus.Services.Game
         public const string SkyrimSE = "The Elder Scrolls V: Skyrim Special Edition";
         private const string SteamAppId = "489830";
 
-        private static readonly string[] CheckForSteamRoot =
+        private readonly string[] _steamRoots;
+
+        public GameService() : this(GetDefaultSteamRoots()) { }
+
+        /// <summary>Allows deterministic discovery tests without touching a user's Steam or game directories.</summary>
+        public GameService(IEnumerable<string> steamRoots)
         {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local/share/Steam"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".steam/steam")
-        };
+            ArgumentNullException.ThrowIfNull(steamRoots);
+            var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+            _steamRoots = NormalizeSteamRoots(steamRoots, comparer);
+        }
+
+        private static string[] GetDefaultSteamRoots()
+        {
+            var roots = new List<string>();
+            var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+            var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+            if (OperatingSystem.IsWindows())
+            {
+                AddSteamRoot(roots, Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Steam");
+                AddSteamRoot(roots, Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Steam");
+                AddSteamRoot(roots, Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Steam");
+                AddSteamRoot(roots, Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Steam");
+                AddSteamRoot(roots, userProfile, "Steam");
+
+                var steamPath = Environment.GetEnvironmentVariable("STEAM_DIR");
+                if (!string.IsNullOrWhiteSpace(steamPath)) roots.Add(steamPath);
+
+                try
+                {
+                    using var key = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
+                    var registeredPath = key?.GetValue("SteamPath") as string;
+                    if (!string.IsNullOrWhiteSpace(registeredPath)) roots.Add(registeredPath);
+                }
+                catch (UnauthorizedAccessException) { }
+                catch (System.Security.SecurityException) { }
+                catch (IOException) { }
+            }
+            else if (!string.IsNullOrWhiteSpace(userProfile))
+            {
+                AddSteamRoot(roots, userProfile, ".local", "share", "Steam");
+                AddSteamRoot(roots, userProfile, ".steam", "steam");
+                AddSteamRoot(roots, userProfile, ".steam", "root");
+                AddSteamRoot(roots, userProfile, ".var", "app", "com.valvesoftware.Steam", "data", "Steam");
+            }
+
+            return NormalizeSteamRoots(roots, comparer);
+        }
+
+        private static string[] NormalizeSteamRoots(IEnumerable<string> roots, StringComparer comparer)
+        {
+            var normalizedRoots = new HashSet<string>(comparer);
+            foreach (var root in roots)
+            {
+                if (TryGetFullPath(root, out var fullPath))
+                    normalizedRoots.Add(fullPath);
+            }
+
+            return normalizedRoots.ToArray();
+        }
+
+        private static bool TryGetFullPath(string? path, out string fullPath)
+        {
+            fullPath = string.Empty;
+            try
+            {
+                if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path))
+                    return false;
+
+                fullPath = Path.GetFullPath(path);
+                return true;
+            }
+            catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException or System.Security.SecurityException)
+            {
+                return false;
+            }
+        }
+
+        private static void AddSteamRoot(List<string> roots, string parent, params string[] parts)
+        {
+            if (!string.IsNullOrWhiteSpace(parent)) roots.Add(Path.Combine(new[] { parent }.Concat(parts).ToArray()));
+        }
 
         private string? FindSkyrimInstallPath()
         {
-            foreach (var root in CheckForSteamRoot)
+            foreach (var root in _steamRoots)
             {
                 var libraryFile = Path.Combine(root, "steamapps", "libraryfolders.vdf");
                 if (!File.Exists(libraryFile))
                     continue;
 
-                var text = File.ReadAllText(libraryFile);
+                string text;
+                try { text = File.ReadAllText(libraryFile); }
+                catch (IOException) { continue; }
+                catch (UnauthorizedAccessException) { continue; }
                 var matches = Regex.Matches(text, "\"path\"\\s*\"([^\"]+)\"");
 
                 foreach (Match match in matches)
                 {
-                    var libraryPath = match.Groups[1].Value;
+                    var configuredPath = match.Groups[1].Value.Replace("\\\\", "\\", StringComparison.Ordinal);
+                    if (!TryGetFullPath(configuredPath, out var libraryPath))
+                        continue;
 
                     var manifest = Path.Combine(libraryPath, "steamapps", $"appmanifest_{SteamAppId}.acf");
                     if (!File.Exists(manifest))
                         continue;
 
-                    var mtext = File.ReadAllText(manifest);
+                    string mtext;
+                    try { mtext = File.ReadAllText(manifest); }
+                    catch (IOException) { continue; }
+                    catch (UnauthorizedAccessException) { continue; }
                     var dirMatch = Regex.Match(mtext, "\"installdir\"\\s*\"([^\"]+)\"");
                     if (!dirMatch.Success)
                         continue;
 
                     var folderName = dirMatch.Groups[1].Value;
-                    var fullPath = Path.Combine(libraryPath, "steamapps", "common", folderName);
+                    if (string.IsNullOrWhiteSpace(folderName) || Path.IsPathRooted(folderName) || folderName.Contains('/') || folderName.Contains('\\') || folderName is "." or "..")
+                        continue;
 
-                    if (Directory.Exists(fullPath))
+                    var gamePath = Path.Combine(libraryPath, "steamapps", "common", folderName);
+                    if (!TryGetFullPath(gamePath, out var fullPath))
+                        continue;
+
+                    if (File.Exists(Path.Combine(fullPath, "SkyrimSE.exe")))
                         return fullPath;
                 }
             }

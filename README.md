@@ -1,79 +1,84 @@
 ![Nolvus Banner](Nolvus.Dashboard/Assets/background-nolvus-banner.svg)
 
-<div align="center">
+# NKNOVA Launcher
 
-[Wiki](https://github.com/sableeyed/NolvusDashboard/wiki) | [Download](https://github.com/sableeyed/NolvusDashboard/releases) | [Nolvus Linux Discord](https://discord.gg/Tazgf4Tr4u) | [Official Nolvus Discord](https://discord.gg/Zkh5PwD) | [Nolvus Linux Issues](https://github.com/sableeyed/NolvusDashboard/issues) | [Original Project](https://github.com/vektor9999/NolvusDashboard) | [Kofi](https://ko-fi.com/mel49542)
+NKNOVA is a GPL-3.0-licensed community fork of the Avalonia-based Nolvus Dashboard. It currently packages the existing dashboard application for Linux x64 and Windows x64. This is a **preview**, not a stable release and not a claim that every Nolvus installation path works end to end.
 
-</div>
+> **Preview safety notice:** A complete live Nolvus installation has not been validated for this release. Back up existing game and modlist data before testing, use a separate test instance, and do not point recovery or install actions at your only working setup. No Skyrim or Nolvus game data is included.
 
----
+## Current status
 
+- The Avalonia dashboard and inherited Nolvus installer/package workflows remain in the application.
+- Linux and Windows package jobs validate the package contents and perform a short extracted-app startup smoke test.
+- Steam discovery checks the Skyrim Special Edition app manifest and the presence of `SkyrimSE.exe`; Linux Steam and Windows Steam discovery use platform-specific roots.
+- File-copy path checks, URL-log redaction, malformed-rule behavior, and selected service behavior have automated regression coverage.
+- NKNOVA's automatic updater is disabled. The preview does not call the upstream `sableeyed/NolvusDashboard` updater or ship `NolvusUpdater`. Install updates manually from a verified NKNOVA package.
 
-# Nolvus Dashboard for Linux
-A Linux native application for installing and managing the Nolvus modlist.
+## Not verified or not included
 
-Nolvus Linux automatically downloads and install all requirements for Nolvus and attempts to automate steam shortcut creation and Proton prefix configuration.
+- A full download, extraction, and installation of a Nolvus list was not performed.
+- Windows Nolvus installation, Proton-prefix workflows, and Windows recovery have not been demonstrated end to end.
+- Redux, Ultimate, Ultra, Graphics-only, ENB, and Community Shaders availability depends on the actual upstream service/API and installed configuration. The preview does not promise all variants are installable.
+- No new, standalone Rust installer or custom one-click installation backend is included.
+- RAM/CPU/download resource-limit controls and interruption recovery are not claimed unless the current UI/backend explicitly enforces them.
+- ImageSharp 3.1.12 remains in the dependency graph pending a vendor-approved upgrade and license. Current advisories have patched v3/v4 lines, but build-time license approval is needed to update. The public preview remains blocked until this gate is resolved.
+- Existing Nolvus/Mega account settings use inherited reversible client-side obfuscation with a built-in key, not secure credential storage. No user credential is bundled, but testers should not rely on it to protect passwords from local access. A backward-compatible OS/user-scoped storage migration is required before a stable release.
 
+## Downloads
 
-## Introduction
+The first candidate is `v0.1.0-preview.1`. The release workflow can build and verify Linux/Windows assets and create an **unpublished GitHub draft pre-release**. It must not be published publicly while the ImageSharp advisory/license gate and full real-install validation remain unresolved. Check [GitHub Releases](https://github.com/ilievi187/NKNOVA-Dashboard-/releases) for release status.
 
-Nolvus Dashboard for Linux is a Linux native application written in .NET 9 and uses the same codebase as the Windows version, only changing what is necessary for functionality.
+Release assets are x64 framework-dependent packages, with SHA-256 files. Install the .NET 10 runtime before launching. If a runtime is missing, install the .NET 10 Desktop Runtime on Windows or the .NET 10 runtime package for your Linux distribution. Keep the extracted folder writable because the current application writes local settings, logs, and cache data relative to its application directory.
 
-The official Windows dashboard does not function natively on Linux and required a Windows system in some form (VM or dual boot) to complete installation. This project exists to remove that requirement entirely.
+### Linux
 
-**Important Notes**
-- This project is in Beta - There will be bugs
-- Please report any issues you encounter to help improve the application
+1. Install a current .NET 10 x64 runtime, Steam, and the external tools required by the particular Proton workflow you intend to use.
+2. Extract `NKNOVA-Linux-0.1.0-preview.1.tar.gz` to a user-writable directory, not `/usr` or another protected location.
+3. Run `./Nolvus/NolvusDashboard` from the extracted package.
+4. Review diagnostics and verify the detected game path before starting any installation or repair action.
 
-## Features
+Do not run the application with `sudo`. Keep your existing Steam library and modlist unchanged during initial testing.
 
-- Linux First: Designed specifically for Linux with minimal external dependencies
-- Upstream Parity: Aims to be bug-for-bug compatible with the official Windows Dashboard
-- Automated Nolvus Installation: Install just like you would on Windows
-- Proton Prefix Configuration: Attempts to manually configure Proton for you, but can also be done manually
-- Launcher Setup: Automatically installs and configures the [Nolvus Launcher](https://github.com/sableeyed/NolvusDashboard/tree/main/Nolvus.Launcher)
-- Improved User Experience: Full GUI application with terminal support
+### Windows
 
+1. Install a current .NET 10 x64 runtime.
+2. Extract `NKNOVA-Windows-0.1.0-preview.1.zip` to a user-writable directory.
+3. Run `NolvusDashboard.exe`.
+4. Confirm Skyrim Special Edition is detected correctly before using installation or repair actions.
 
-## Quick Start
+### Build from source
 
-### Requirements
-- Linux
-- .NET 9 Runtime installed with your package manager
-- Steam installed and configured
-- Vanilla Skyrim with AE content downloaded
-- Nexus Account (Premium ideally)
-- External Tools (must be accessible in PATH)
-  - protontricks
-  - winetricks
-  - xrandr (for resolution detection)
-  - xwayland (if using a wayland compositor)
-- Ensure winetricks is up to date (necessary for automated prefix setup)
-  - `sudo winetricks --self-update`
-
-## Installation
-
-### Prebuilt Binaries (Recommended)
-
-Prebuilt binaries are provided. Download the [latest release](https://github.com/sableeyed/NolvusDashboard/releases) and run it like a standard Linux application.
+Install the .NET 10 SDK. On Linux, from the repository root:
 
 ```bash
-chmod +x NolvusDashboard
-./NolvusDashboard
+dotnet test "Nolvus Dashboard Linux.sln" --configuration Release
+./build.sh
 ```
 
-Or double click `NolvusDashboard`
+`build.sh` publishes the dashboard only, omits the upstream updater, and refuses to overwrite an existing `~/Desktop/Binaries-<version>.tar.gz` archive.
 
+On Windows PowerShell:
 
-## License
+```powershell
+dotnet test 'Nolvus Dashboard Linux.sln' --configuration Release
+.\scripts\package-windows.ps1 -OutputDirectory .\artifacts
+```
 
-This project is licensed under the **GNU General Public License v3 (GPL-3.0).**
+The Windows package script validates archive paths and contents, extracts the generated zip, and runs a short startup smoke test with an isolated profile. The Linux and Windows package scripts do not install Nolvus or modify a user's Steam/game data as part of packaging.
 
-## Credits & Acknowledgements
+## Troubleshooting and recovery
 
-- Vektor for creating Nolvus and open sourcing the dashboard
-- Furglitch/Rockerbacon for their work on MO2 Linux
-- The Nolvus Community
-- Linux gaming and modding community
-- Valve for Proton
-- Everyone who has contributed to this project with code or testing
+See [Installation](docs/INSTALLATION.md), [Troubleshooting](docs/TROUBLESHOOTING.md), and [Release process](docs/RELEASING.md). Preserve your original package and configuration backups until the new build is known to start. To roll back a failed preview test, exit NKNOVA and remove only the new extracted NKNOVA directory that you created. Do not delete the Steam library, game directory, Nolvus instance, or shared download cache as a generic troubleshooting step.
+
+## Licensing and attribution
+
+NKNOVA source code is distributed under GPL-3.0. See [LICENSE](LICENSE) and retain upstream attribution. Nolvus, Skyrim, Steam, Proton, Nexus Mods, Avalonia, and Six Labors products are third-party names and software governed by their respective terms. No game assets are redistributed by NKNOVA.
+
+ImageSharp 3.1.12 remains in use while maintainers evaluate an upgrade. The current Six Labors advisories identify ImageSharp 3.2.0 as patched for the affected v3 lines and 4.1.2 or later for the affected v4 lines. Direct references to ImageSharp 3.2.0 and later require a valid Six Labors license at build time. Any community license is application-based; no key is embedded in this repository or release. See the official [Six Labors licensing page](https://sixlabors.com/pricing/) and [ImageSharp license documentation](https://docs.sixlabors.com/articles/imagesharp/) before changing the package version.
+
+## Credits
+
+- The Nolvus team and the upstream Nolvus Dashboard contributors.
+- The original Linux Dashboard maintainers and contributors.
+- The Avalonia, .NET, Proton, Steam, and Linux gaming communities.
+- Everyone contributing code, tests, documentation, and issue reports.

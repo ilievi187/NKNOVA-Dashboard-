@@ -24,8 +24,8 @@ required_checks=(
     "Linux solution test, build and package"
     "ExecutableResolver tests (ubuntu-latest)"
     "ExecutableResolver tests (windows-latest)"
-    "Redaction regression (ubuntu-latest)"
-    "Redaction regression (windows-latest)"
+    "Services redaction regression (ubuntu-latest)"
+    "Services redaction regression (windows-latest)"
     "CodeQL (actions)"
     "CodeQL (csharp)"
     "CodeQL (rust)"
@@ -79,17 +79,17 @@ wait_for_main_workflow() {
 
 ensure_main_healthy
 
+prs_json=$(gh pr list --repo "$repo" --state open --base main --limit 100 \
+    --json number,createdAt,author,isDraft,baseRefName,headRepository,headRepositoryOwner)
 mapfile -t prs < <(
-    gh pr list --repo "$repo" --state open --base main --limit 100 \
-        --json number,createdAt,author,isDraft,baseRefName,headRepository,headRepositoryOwner \
-    | jq -r --arg owner "$owner" --arg repo "$repo" '
+    jq -r --arg owner "$owner" --arg repo "$repo" '
         sort_by(.createdAt)[]
         | select(.author.login == $owner)
         | select(.isDraft == false and .baseRefName == "main")
         | select(.headRepository.nameWithOwner == $repo)
         | select(.headRepositoryOwner.login == $owner)
         | .number
-    '
+    ' <<<"$prs_json"
 )
 
 if (( ${#prs[@]} == 0 )); then
@@ -192,13 +192,12 @@ for number in "${prs[@]}"; do
     merge_sha=$(jq -r '.mergeCommit.oid' <<<"$merged")
     echo "PR #${number} merged at ${merge_sha}. Dispatching post-merge acceptance workflows."
 
-    for workflow_file in nknova-ci.yml nolvus-core-tests.yml nolvus-services-redaction.yml nknova-security-gates.yml; do
+    for workflow_file in nknova-ci.yml nolvus-core-tests.yml nknova-security-gates.yml; do
         gh api --method POST "repos/${repo}/actions/workflows/${workflow_file}/dispatches" -f ref=main
     done
 
     wait_for_main_workflow nknova-ci.yml "$merge_sha"
     wait_for_main_workflow nolvus-core-tests.yml "$merge_sha"
-    wait_for_main_workflow nolvus-services-redaction.yml "$merge_sha"
     wait_for_main_workflow nknova-security-gates.yml "$merge_sha"
 
     ensure_main_healthy

@@ -48,6 +48,29 @@ jobs:
       - name: Run package tests
         run: dotnet test Nolvus.Package.Tests/Nolvus.Package.Tests.csproj --configuration Release --logger "console;verbosity=detailed"
 
+  services-redaction:
+    name: Services redaction regression (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 9.0.x
+      - name: Run URL redaction regression when the focused test project is present
+        if: ${{ hashFiles('Nolvus.Services.Tests/Nolvus.Services.Tests.csproj') != '' }}
+        run: dotnet run --project Nolvus.Services.Tests/Nolvus.Services.Tests.csproj --configuration Release
+      - name: Report that no focused redaction project exists on this commit yet
+        if: ${{ hashFiles('Nolvus.Services.Tests/Nolvus.Services.Tests.csproj') == '' }}
+        run: echo "No Nolvus.Services.Tests project is present in this commit."
+
   linux-release:
     name: Linux solution build and package
     runs-on: ubuntu-latest

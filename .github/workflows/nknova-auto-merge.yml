@@ -6,8 +6,6 @@ on:
       - NKNOVA CI
       - NKNOVA Security Gates
       - ExecutableResolver CI
-      - Nolvus Services URL redaction regression
-      - Nolvus Services redaction tests
     types:
       - completed
   schedule:

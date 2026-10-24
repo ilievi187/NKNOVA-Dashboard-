@@ -182,10 +182,18 @@ namespace Nolvus.Dashboard.Frames
                 ServiceSingleton.Dashboard.Status("Connecting to Nolvus...");
                 ServiceSingleton.Logger.Log("Connecting to Nolvus...");
 
-                var ApiUrl = ServiceSingleton.Globals.ApiUrl;
-                var ApiVersion = ServiceSingleton.Globals.ApiVersion;
-                var UserName = ServiceSingleton.Globals.NolvusUserName;
-                var Password = ServiceSingleton.Globals.NolvusPassword;
+                var account = await Task.Run(() => new
+                {
+                    ApiUrl = ServiceSingleton.Globals.ApiUrl,
+                    ApiVersion = ServiceSingleton.Globals.ApiVersion,
+                    UserName = ServiceSingleton.Globals.NolvusUserName,
+                    Password = ServiceSingleton.Lib.DecryptString(ServiceSingleton.Globals.NolvusPassword)
+                });
+
+                var ApiUrl = account.ApiUrl;
+                var ApiVersion = account.ApiVersion;
+                var UserName = account.UserName;
+                var Password = account.Password;
 
                 if (ApiVersion == string.Empty || UserName == string.Empty || Password == string.Empty)
                 {
@@ -193,9 +201,9 @@ namespace Nolvus.Dashboard.Frames
                 }
                 else
                 {
-                    ApiManager.Init(ApiUrl, ApiVersion, UserName, ServiceSingleton.Lib.DecryptString(Password));
+                    ApiManager.Init(ApiUrl, ApiVersion, UserName, Password);
 
-                    if (!await ApiManager.Service.Installer.Authenticate(UserName, ServiceSingleton.Lib.DecryptString(Password)))
+                    if (!await ApiManager.Service.Installer.Authenticate(UserName, Password))
                     {
                         throw new Exception("Invalid Nolvus user name / password or your account has not been activated!");
                     }
@@ -225,8 +233,11 @@ namespace Nolvus.Dashboard.Frames
 
             ServiceSingleton.Files.RemoveDirectory(ServiceSingleton.Folders.NexusCacheDirectory, false);
 
-            var key = ServiceSingleton.Globals.NexusApiKey;
-            var agent = ServiceSingleton.Globals.NexusUserAgent;
+            var nexusSettings = await Task.Run(() => (
+                ApiKey: ServiceSingleton.Globals.NexusApiKey,
+                UserAgent: ServiceSingleton.Globals.NexusUserAgent));
+            var key = nexusSettings.ApiKey;
+            var agent = nexusSettings.UserAgent;
 
             if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(agent))
                 throw new Exception("Nexus API key or User Agent missing!");

@@ -68,8 +68,10 @@ jobs:
         run: dotnet test "Nolvus Dashboard Linux.sln" --configuration Release
       - name: Run resolver tests
         run: dotnet test Nolvus.Core.Tests/Nolvus.Core.Tests.csproj --configuration Release
-      - name: Run service regressions
-        run: dotnet run --project Nolvus.Services.Tests/Nolvus.Services.Tests.csproj --configuration Release
+      - name: Install Linux Secret Service test dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y dbus-daemon gnome-keyring libsecret-tools
+      - name: Run service regressions in isolated Secret Service session
+        run: bash scripts/run-services-regressions-linux.sh
       - name: Build Linux release archive
         shell: bash
         env:
@@ -102,6 +104,7 @@ jobs:
           grep -Fx 'Nolvus/LICENSE' "$RUNNER_TEMP/nknova-linux-files.txt"
           grep -Fx 'Nolvus/THIRD-PARTY-NOTICES.md' "$RUNNER_TEMP/nknova-linux-files.txt"
           grep -Fx 'Nolvus/docs/INSTALLATION.md' "$RUNNER_TEMP/nknova-linux-files.txt"
+          grep -Fx 'Nolvus/docs/CREDENTIALS.md' "$RUNNER_TEMP/nknova-linux-files.txt"
           mkdir -p "$RUNNER_TEMP/nknova-linux-extracted" "$RUNNER_TEMP/nknova-linux-home"
           tar -xzf "$artifact" -C "$RUNNER_TEMP/nknova-linux-extracted"
           (

@@ -7,6 +7,13 @@
 - On Linux, confirm the desktop session and native libraries required by Avalonia/CEF are installed. The CI smoke test uses Xvfb, so it does not prove compatibility with every Wayland compositor or distribution.
 - Check the `Logs` directory beside the extracted application. Preserve logs when reporting a problem, but remove or redact account names, access tokens, signed download URLs, and local personal paths before sharing them.
 
+## Credential save fails on Linux
+
+- New credential saves require `secret-tool` (`libsecret-tools`) and a running, unlocked Secret Service-compatible user keyring such as GNOME Keyring or compatible KWallet.
+- Unlock the keyring in the same desktop user session that runs NKNOVA, then retry. Do not run NKNOVA with `sudo`; root uses a different Secret Service/keyring.
+- NKNOVA fails closed if the keyring is missing, locked, timed out, or cannot be reached. It does not store a new key in a plaintext fallback file, and the account save reports an error without replacing the previous `NolvusDashboard.ini`.
+- Do not delete `credentials.key`, Secret Service items, or edit `nknova:v2:`/`nknova:v3:` values manually. See [Credential storage](CREDENTIALS.md) for legacy compatibility and backup/recovery limitations.
+
 ## Skyrim is not detected
 
 - Verify that Steam is installed for the same user running NKNOVA.

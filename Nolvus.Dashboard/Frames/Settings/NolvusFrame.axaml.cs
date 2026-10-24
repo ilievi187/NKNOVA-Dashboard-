@@ -83,9 +83,11 @@ RefreshInterval=10
 
         private async Task<bool> NolvusAuthenticate()
         {
-            ApiManager.Init(ServiceSingleton.Globals.ApiUrl, "v1", TxtBxUserName.Text, TxtBxPassword.Text);
+            string userName = TxtBxUserName.Text ?? string.Empty;
+            string password = TxtBxPassword.Text ?? string.Empty;
+            ApiManager.Init(ServiceSingleton.Globals.ApiUrl, "v1", userName, password);
 
-            return await ApiManager.Service.Installer.Authenticate(TxtBxUserName.Text, TxtBxPassword.Text);
+            return await ApiManager.Service.Installer.Authenticate(userName, password);
         }
 
         private async void BtnContinue_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -112,16 +114,36 @@ RefreshInterval=10
                 SettingsCache.NolvusUser = TxtBxUserName.Text;
                 SettingsCache.NolvusPassword = TxtBxPassword.Text;
 
-                File.WriteAllText(
-                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NolvusDashboard.ini"),
-                    string.Format(
-                    IniFile,
-                    SettingsCache.GameDirectory,
-                    SettingsCache.NexusApiKey,
-                    SettingsCache.NolvusUser,
-                    ServiceSingleton.Lib.EncryptString(SettingsCache.NolvusPassword),
-                    Environment.ProcessorCount
-                ));
+                try
+                {
+                    string settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NolvusDashboard.ini");
+                    string gameDirectory = SettingsCache.GameDirectory;
+                    string nexusApiKey = SettingsCache.NexusApiKey;
+                    string nolvusUser = SettingsCache.NolvusUser;
+                    string nolvusPassword = SettingsCache.NolvusPassword;
+
+                    await Task.Run(() =>
+                    {
+                        string settingsContents = string.Format(
+                            IniFile,
+                            gameDirectory,
+                            ServiceSingleton.Lib.EncryptString(nexusApiKey),
+                            nolvusUser,
+                            ServiceSingleton.Lib.EncryptString(nolvusPassword),
+                            Environment.ProcessorCount);
+
+                        Nolvus.Services.Settings.SettingsService.WriteTextAtomically(settingsPath, settingsContents);
+                    });
+                }
+                catch
+                {
+                    HideLoading();
+                    SetCheck(
+                        "Could not save credentials securely. On Linux, verify that a Secret Service-compatible keyring is installed and unlocked. Existing settings were not changed.",
+                        true);
+                    return;
+                }
+
                 await ServiceSingleton.Dashboard.LoadFrameAsync<StartFrame>();
             });
         }

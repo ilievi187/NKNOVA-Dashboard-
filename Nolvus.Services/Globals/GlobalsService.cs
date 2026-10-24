@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Diagnostics;
 using Nolvus.Core.Interfaces;
 using Nolvus.Core.Services;
+using Nolvus.Services.Lib;
 using System.Text.RegularExpressions;
 
 namespace Nolvus.Services.Globals
@@ -56,7 +57,19 @@ namespace Nolvus.Services.Globals
             set => ServiceSingleton.Settings.StoreIniValue(MegaSection, MegaPswd, ServiceSingleton.Lib.EncryptString(value));
         }
 
-        public string NexusApiKey => ServiceSingleton.Settings.GetIniValue(NexusSection, ApiKey);
+        public string NexusApiKey
+        {
+            get
+            {
+                var storedValue = ServiceSingleton.Settings.GetIniValue(NexusSection, ApiKey);
+                if (string.IsNullOrEmpty(storedValue))
+                    return string.Empty;
+
+                return UserCredentialProtector.IsProtectedValue(storedValue)
+                    ? ServiceSingleton.Lib.DecryptString(storedValue)
+                    : storedValue;
+            }
+        }
         public string NexusUserAgent => ServiceSingleton.Settings.GetIniValue(NexusSection, UserAgent);
 
         public string NolvusUserAgent

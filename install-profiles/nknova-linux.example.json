@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "nknova-awakening-linux",
+  "displayName": "NKNOVA - Nolvus Awakening + Community Shaders (Linux)",
+  "game": {
+    "steamAppId": 489830,
+    "executable": "SkyrimSE.exe"
+  },
+  "runtime": {
+    "protonVersion": "GE-Proton10-10",
+    "displayBackend": "xwayland",
+    "modManager": "fluorine"
+  },
+  "components": [
+    {
+      "id": "nolvus-awakening",
+      "version": "upstream-managed",
+      "sourceKind": "upstream-dashboard",
+      "dependencies": []
+    },
+    {
+      "id": "community-shaders",
+      "version": "1.9.1",
+      "sourceKind": "user-archive",
+      "archiveFile": "CommunityShaders.zip",
+      "dependencies": [
+        "nolvus-awakening"
+      ]
+    },
+    {
+      "id": "cs-upscaling",
+      "version": "1.4.0",
+      "sourceKind": "user-archive",
+      "archiveFile": "CSUpscaling.zip",
+      "dependencies": [
+        "community-shaders"
+      ]
+    },
+    {
+      "id": "nknova-custom-mods",
+      "version": "user-maintained",
+      "sourceKind": "user-archive",
+      "archiveFile": "NKNOVA-Mods.zip",
+      "dependencies": [
+        "nolvus-awakening"
+      ]
+    }
+  ]
+}

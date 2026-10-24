@@ -1,5 +1,21 @@
 # Change log
 
+## Unreleased — Phase 2 security work
+
+### Included
+
+- Protect newly saved account credentials with AES-GCM. Windows stores the key using current-user DPAPI; Linux stores it through the user's freedesktop Secret Service, with no plaintext-file fallback.
+- Preserve read-only compatibility for legacy TripleDES Nolvus/Mega values, plaintext Nexus keys, and the prior v2 AES-GCM file-key envelope. Reads do not silently rewrite credentials.
+- Make main-settings INI updates atomic and owner-only on Unix. Credential save/keyring work runs off the Avalonia UI thread and fails closed with an actionable error.
+- Add regression coverage for credential round trips, persistence, tampering, missing/invalid keys, legacy reads, settings integration, symlink rejection, Linux keyring behavior, and test-only isolation.
+- Run Linux Secret Service integration tests in an isolated D-Bus/GNOME Keyring session in CI.
+
+### Remaining release blockers
+
+- Existing legacy credentials remain in their original format until users explicitly re-enter and save them. Windows DPAPI still requires GitHub Windows CI verification.
+- ImageSharp 3.1.12 remains affected by five current advisories. The preserved v4.1.3 dependency candidate needs an approved Six Labors community key in a private CI secret and cross-platform validation before it can be applied.
+- No complete live Nolvus installation has been performed.
+
 ## 0.1.0-preview.2 (unpublished draft candidate)
 
 This follow-up candidate supersedes the still-unpublished `v0.1.0-preview.1` draft. It focuses on remote image resource safety and does not change the existing ImageSharp package version.
@@ -15,7 +31,7 @@ This follow-up candidate supersedes the still-unpublished `v0.1.0-preview.1` dra
 
 - No complete Nolvus installation was performed.
 - ImageSharp 3.1.12 still requires an approved license before a patched package upgrade.
-- Existing Nolvus/Mega stored passwords still use reversible legacy obfuscation.
+- Existing unsaved Nolvus/Mega values still use reversible legacy obfuscation; new values use user-scoped protection.
 
 ## 0.1.0-preview.1 (unpublished draft)
 
@@ -33,6 +49,6 @@ This is the first NKNOVA preview candidate. It is an unpublished draft for maint
 
 - No complete live Nolvus download or installation was performed.
 - Windows Nolvus installation and recovery remain unverified end to end.
-- ImageSharp 3.1.12 remains in the dependency graph. Official advisories identify 3.2.0 as patched for affected v3 lines and 4.1.2 or later for affected v4 lines, but direct references require an approved Six Labors license at build time.
-- Nolvus/Mega passwords continue to use inherited reversible client-side obfuscation with a built-in key. No user credential is bundled, but this is not secure at-rest protection. A backward-compatible OS/user-scoped credential migration remains necessary before stable release.
+- ImageSharp 3.1.12 remains in the dependency graph. The Sep 15, 2026 advisory set lists 4.1.2 as patched; v3.2.0 does not fix the full current set. Direct references require a valid Six Labors license at build time.
+- New credentials use Windows current-user DPAPI or Linux Secret Service key storage. Existing Nolvus/Mega/Nexus credentials are read-compatible but are not silently migrated; old values remain at their prior risk until explicitly saved again.
 - Full end-user runtime, game, and modlist compatibility has not been established. See README and `docs/INSTALLATION.md`.

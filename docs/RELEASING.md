@@ -30,7 +30,7 @@ Before changing the draft to a public pre-release, a maintainer must verify all 
 3. No unresolved critical/high findings affect shipped behavior; any finding dismissed as unreachable must be mapped to the actual call graph and reviewed before closure.
 4. The ImageSharp advisories have been fixed with a compatible licensed package or a reachable-code mitigation has been independently reviewed and documented.
 5. A valid approved Six Labors license is available for every direct-reference assembly before building upgraded packages.
-6. Legacy Nolvus/Mega credential storage has either been migrated compatibly to platform/user-scoped protection or its residual risk is explicitly accepted for the preview. Do not describe the existing fixed-key obfuscation as secure storage.
+6. Credential behavior and rollback limits are documented. New Nolvus/Mega/Nexus saves use platform-scoped protection, but legacy TripleDES Nolvus/Mega values and legacy plaintext Nexus values are only read-compatible until users explicitly save them again. Do not describe those unsaved legacy values as protected or claim automatic migration.
 7. A supported real Nolvus test environment has completed applicable installer acceptance tests. Do not modify an ordinary user's game installation to satisfy this gate.
 8. Release notes, known limitations, runtime requirements, and rollback instructions are accurate.
 
@@ -40,9 +40,11 @@ A release is a package, not an updater migration. If a draft is defective, keep 
 
 ## ImageSharp security and licensing
 
-Do not suppress NuGet audit findings or add a key before approval. ImageSharp 3.1.12 is in the affected ranges of multiple current advisories. Official Six Labors advisories identify 3.2.0 as patched for affected v3 lines and 4.1.2 or later for affected v4 lines. The application is currently on 3.1.12; the preserved `fix/imagesharp-security-update` stash contains a proposed 4.1.3 dependency change, but that candidate has not been validated with a license and remains untouched.
+The current dependency is ImageSharp 3.1.12 in six projects, with ImageSharp.Drawing 2.1.7 and ImageSharp.Web 3.2.0 in Nolvus.Services. Five advisories affect 3.1.12: `GHSA-gwg2-r3hj-4w44`, `GHSA-j3p4-wp97-rph4`, `GHSA-j9gm-c75j-xc9q`, `GHSA-jjfr-hcj7-qf5w`, and `GHSA-wmxv-xphr-5c9g`. The Sep 15, 2026 advisories list 4.1.2 as patched; 3.2.0 does not resolve the full set. Official releases list 4.1.3 as the latest release as of Oct 24, 2026.
 
-Direct package references to ImageSharp 3.2.0 and later require a Six Labors license at build time. The official application page explicitly accepts open-source/source-available projects and states eligible open-source applications receive a community key automatically. NKNOVA's public GPL-3.0 repository appears to fit that category, but no application has been submitted and no key has been issued or added. The six current direct-reference assembly names to provide are:
+The preserved `fix/imagesharp-security-update` stash changes direct package references to ImageSharp 4.1.3, Drawing 3.1.3, and Web 4.0.2. It is dependency-only and has not been applied, restored, compiled, or tested. ImageSharp types appear across core interfaces, services, package/report code, controls, and dashboard frames, so replacement is a broad API migration rather than a contained package swap. No replacement has been justified or tested.
+
+Starting with ImageSharp 3.2.0, direct-reference projects require a valid Six Labors license at build time. Six Labors documents a community-key application path for open-source/source-available projects, requiring case-sensitive assembly names. NKNOVA appears to fit that category, but no application has been submitted and no key has been issued. The current licensing documentation says not to commit license files/keys to a public repository; the owner action is to submit the application and add the approved key to GitHub Actions as a repository secret such as `SIXLABORS_LICENSE_KEY`. The exact assemblies to provide are:
 
 - `Vcc.Nolvus.Api.Installer`
 - `Nolvus.Components`
@@ -51,4 +53,4 @@ Direct package references to ImageSharp 3.2.0 and later require a Six Labors lic
 - `Nolvus.Package`
 - `Nolvus.Services` (also directly references ImageSharp.Drawing and ImageSharp.Web)
 
-The names are case-sensitive. The official docs say an assembly-scoped community key may be committed to the named public project; unrestricted/community keys and commercial keys must remain private. Maintainers must not add an unapproved key or treat this release gate as satisfied until the approved license is in place and all direct-reference builds pass.
+This is a release blocker until an authorized maintainer submits the community-license application, adds an approved key as a private GitHub Actions secret, and the exact candidate passes Linux/Windows restore, Release build, tests, and CI. Do not add a key to tracked files or suppress audit findings before that gate is satisfied. See [current ImageSharp license/build documentation](https://docs.sixlabors.com/articles/imagesharp/) and the [official v4.1.3 release](https://github.com/SixLabors/ImageSharp/releases/tag/v4.1.3).

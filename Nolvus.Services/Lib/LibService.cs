@@ -23,6 +23,18 @@ namespace Nolvus.Services.Lib
         private const int MaximumRemoteImageBytes = 16 * 1024 * 1024;
         private const long MaximumRemoteImagePixels = 40_000_000;
         private static readonly HttpClient _http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        private readonly UserCredentialProtector _credentialProtector;
+
+        public LibService() : this(null, null) { }
+
+        /// <summary>Allows credential tests to use isolated key storage without touching real user credentials.</summary>
+        public LibService(string? credentialStorageDirectory) : this(credentialStorageDirectory, null) { }
+
+        /// <summary>Allows Linux Secret Service integration tests to use an isolated item scope.</summary>
+        public LibService(string? credentialStorageDirectory, string? secretServiceScope)
+        {
+            _credentialProtector = new UserCredentialProtector(credentialStorageDirectory, secretServiceScope);
+        }
 
         public Image GetImageFromUrl(string url)
         {
@@ -168,43 +180,31 @@ namespace Nolvus.Services.Lib
 
         public string EncryptString(string value)
         {
-            string Key = "1F2CAB925HFBBCAE589632FABC547892";
-            string IV = "ACtEDg70CcU=";
-
-            using var tripleDES = new TripleDESCryptoServiceProvider
-            {
-                Key = Convert.FromBase64String(Key),
-                IV = Convert.FromBase64String(IV),
-                Mode = CipherMode.ECB,
-                Padding = PaddingMode.PKCS7
-            };
-
-            using var encryptor = tripleDES.CreateEncryptor(tripleDES.Key, tripleDES.IV);
-            var input = Encoding.UTF8.GetBytes(value);
-
-            using var ms = new MemoryStream();
-            using (var cs = new CryptoStream(ms, encryptor, CryptoStreamMode.Write))
-            {
-                cs.Write(input, 0, input.Length);
-                cs.FlushFinalBlock();
-            }
-            return Convert.ToBase64String(ms.ToArray());
+            return _credentialProtector.Protect(value);
         }
 
         public string DecryptString(string value)
         {
-            string Key = "1F2CAB925HFBBCAE589632FABC547892";
-            string IV = "ACtEDg70CcU=";
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
 
-            using var tripleDES = new TripleDESCryptoServiceProvider
-            {
-                Key = Convert.FromBase64String(Key),
-                IV = Convert.FromBase64String(IV),
-                Mode = CipherMode.ECB,
-                Padding = PaddingMode.PKCS7
-            };
+            return UserCredentialProtector.IsProtectedValue(value)
+                ? _credentialProtector.Unprotect(value)
+                : DecryptLegacyString(value);
+        }
 
-            using var decryptor = tripleDES.CreateDecryptor(tripleDES.Key, tripleDES.IV);
+        private static string DecryptLegacyString(string value)
+        {
+            string key = "1F2CAB925HFBBCAE589632FABC547892";
+            string iv = "ACtEDg70CcU=";
+
+            using var tripleDes = TripleDES.Create();
+            tripleDes.Key = Convert.FromBase64String(key);
+            tripleDes.IV = Convert.FromBase64String(iv);
+            tripleDes.Mode = CipherMode.ECB;
+            tripleDes.Padding = PaddingMode.PKCS7;
+
+            using var decryptor = tripleDes.CreateDecryptor(tripleDes.Key, tripleDes.IV);
             var input = Convert.FromBase64String(value);
 
             using var ms = new MemoryStream();
@@ -213,6 +213,7 @@ namespace Nolvus.Services.Lib
                 cs.Write(input, 0, input.Length);
                 cs.FlushFinalBlock();
             }
+
             return Encoding.UTF8.GetString(ms.ToArray());
         }
     }

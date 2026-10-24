@@ -5,6 +5,8 @@ using Nolvus.Core.Frames;
 using Nolvus.Core.Interfaces;
 using Nolvus.Core.Services;
 using Nolvus.Dashboard.Controls;
+using Nolvus.Services.Globals;
+using Nolvus.Services.Settings;
 using Avalonia.Threading;
 using System.Diagnostics;
 using Avalonia;
@@ -23,29 +25,39 @@ namespace Nolvus.Dashboard.Frames.Settings
 
         protected override void OnLoad()
         {
+            ServiceSingleton.Dashboard.Title("Nolvus Dashboard - [Settings]");
+            ServiceSingleton.Dashboard.Info("Global Settings");
+            TglBtnAnonymous.IsChecked = true;
+        }
+
+        protected override async Task OnLoadedAsync()
+        {
             try
             {
-                ServiceSingleton.Dashboard.Title("Nolvus Dashboard - [Settings]");
-                ServiceSingleton.Dashboard.Info("Global Settings");
-
-                TxtBxUserName.Text = ServiceSingleton.Globals.MegaEmail;
-                TxtBxPassword.Text = ServiceSingleton.Globals.MegaPassword;
-
-                TglBtnAnonymous.IsChecked = true;
-
-                if (!ServiceSingleton.Globals.MegaAnonymousConnection)
+                var settings = await Task.Run(() => new
                 {
-                    TglBtnAnonymous.IsChecked = false;
-                }
+                    MegaEmail = ServiceSingleton.Globals.MegaEmail,
+                    MegaPassword = ServiceSingleton.Globals.MegaPassword,
+                    MegaAnonymousConnection = ServiceSingleton.Globals.MegaAnonymousConnection,
+                    NexusAutoClick = ServiceSingleton.Settings.NexusAutoClick
+                });
 
-                DrpDwnLstProcessCount.ItemsSource = GetProcessorCores();
-                DrpDwnLstProcessCount.SelectedIndex = CoreIndex(GetProcessorCores());
-                
-                TglBtnAutoClick.IsChecked = ServiceSingleton.Settings.NexusAutoClick;
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    TxtBxUserName.Text = settings.MegaEmail;
+                    TxtBxPassword.Text = settings.MegaPassword;
+                    TglBtnAnonymous.IsChecked = settings.MegaAnonymousConnection;
+
+                    DrpDwnLstProcessCount.ItemsSource = GetProcessorCores();
+                    DrpDwnLstProcessCount.SelectedIndex = CoreIndex(GetProcessorCores());
+                    TglBtnAutoClick.IsChecked = settings.NexusAutoClick;
+                });
             }
-            catch (Exception ex)
+            catch
             {
-                ServiceSingleton.Dashboard.Error("Error during global settings loading", ex.Message, ex.StackTrace);
+                await ServiceSingleton.Dashboard.Error(
+                    "Error during global settings loading",
+                    "Saved credentials could not be loaded securely. On Linux, verify that the user keyring is installed and unlocked.");
             }
         }
 
@@ -103,38 +115,51 @@ namespace Nolvus.Dashboard.Frames.Settings
                 {
                     if (TglBtnAnonymous.IsChecked == false)
                     {
-                        UpdateButton("Validating...");
+                        await UpdateButton("Validating...");
                         await ServiceSingleton.Files.AuthenticateToMegaApi(TxtBxUserName.Text, TxtBxPassword.Text);
                     }
                 }
                 catch
                 {
-                    UpdateButton("Save");
+                    await UpdateButton("Save");
                     NolvusMessageBox.Show(owner, "Error", "Unable to connect to mega.nz! Please review your credentials", MessageBoxType.Error);
                     return;
                 }
 
                 try
                 {
-                    ServiceSingleton.Globals.MegaAnonymousConnection = TglBtnAnonymous.IsChecked == true;
+                    bool anonymousConnection = TglBtnAnonymous.IsChecked == true;
+                    string email = TxtBxUserName.Text ?? string.Empty;
+                    string password = TxtBxPassword.Text ?? string.Empty;
+                    await UpdateButton("Saving securely...");
 
-                    if (TxtBxUserName.Text != string.Empty)
+                    await Task.Run(() =>
                     {
-                        ServiceSingleton.Globals.MegaEmail = TxtBxUserName.Text;
-                    }
+                        string protectedPassword = string.IsNullOrEmpty(password)
+                            ? string.Empty
+                            : ServiceSingleton.Lib.EncryptString(password);
 
-                    if (TxtBxPassword.Text != string.Empty)
-                    {
-                        ServiceSingleton.Globals.MegaPassword = TxtBxPassword.Text;
-                    }
-                    
+                        SettingsService.UpdateIniFileAtomically(SettingsService.IniFile, data =>
+                        {
+                            data[GlobalsService.MegaSection][GlobalsService.MegaAnonymous] = anonymousConnection.ToString();
+                            if (!string.IsNullOrEmpty(email))
+                                data[GlobalsService.MegaSection][GlobalsService.MegaUserName] = email;
+                            if (!string.IsNullOrEmpty(password))
+                                data[GlobalsService.MegaSection][GlobalsService.MegaPswd] = protectedPassword;
+                        });
+                    });
+
                     NolvusMessageBox.Show(owner, "Information", "Your mega.nz configuration has been validating and saved", MessageBoxType.Info);
-                    UpdateButton("Save");
+                    await UpdateButton("Save");
                 }
-                catch (Exception ex)
+                catch
                 {
-                    UpdateButton("Save");
-                    NolvusMessageBox.Show(owner, "Error", string.Format("Unexpected error ocurred with message : {0}", ex.Message), MessageBoxType.Error);                                            
+                    await UpdateButton("Save");
+                    NolvusMessageBox.Show(
+                        owner,
+                        "Error",
+                        "Unable to save Mega settings securely. On Linux, verify that the user keyring is installed and unlocked. Existing settings were left unchanged.",
+                        MessageBoxType.Error);
                 }
             }
         }

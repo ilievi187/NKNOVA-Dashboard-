@@ -23,8 +23,8 @@ NKNOVA is a GPL-3.0-licensed community fork of the Avalonia-based Nolvus Dashboa
 - Redux, Ultimate, Ultra, Graphics-only, ENB, and Community Shaders availability depends on the actual upstream service/API and installed configuration. The preview does not promise all variants are installable.
 - No new, standalone Rust installer or custom one-click installation backend is included.
 - RAM/CPU/download resource-limit controls and interruption recovery are not claimed unless the current UI/backend explicitly enforces them.
-- ImageSharp 3.1.12 remains in the dependency graph pending a vendor-approved upgrade and license. Current advisories have patched v3/v4 lines, but build-time license approval is needed to update. The public preview remains blocked until this gate is resolved.
-- Existing Nolvus/Mega account settings use inherited reversible client-side obfuscation with a built-in key, not secure credential storage. No user credential is bundled, but testers should not rely on it to protect passwords from local access. A backward-compatible OS/user-scoped storage migration is required before a stable release.
+- ImageSharp 3.1.12 remains in six direct-reference projects and generates five distinct NuGet advisories (three high, two moderate). The current September 2026 advisory set identifies 4.1.2 or later as patched; 3.2.0 does not resolve the full set. The preserved v4.1.3 stash is a dependency-only candidate, not validated or applied. A build-time Six Labors license is required for the upgrade, and no application/key has been approved or added. See [Release process](docs/RELEASING.md).
+- New credential saves use AES-GCM, with the key stored via Windows current-user DPAPI or Linux Secret Service. Existing TripleDES Nolvus/Mega values and plaintext Nexus keys remain readable for compatibility; they are not silently rewritten and remain at their prior risk until the user explicitly saves credentials again. Linux credential saving requires an unlocked Secret Service-compatible keyring. See [Credential storage](docs/CREDENTIALS.md).
 
 ## Downloads
 
@@ -34,7 +34,7 @@ Release assets are x64 framework-dependent packages, with SHA-256 files. Install
 
 ### Linux
 
-1. Install a current .NET 10 x64 runtime, Steam, and the external tools required by the particular Proton workflow you intend to use.
+1. Install a current .NET 10 x64 runtime, Steam, and the external tools required by the particular Proton workflow you intend to use. Credential saving also requires a running/unlocked Secret Service-compatible user keyring (for example GNOME Keyring or a compatible KWallet service).
 2. Extract `NKNOVA-Linux-0.1.0-preview.2.tar.gz` to a user-writable directory, not `/usr` or another protected location.
 3. Run `./Nolvus/NolvusDashboard` from the extracted package.
 4. Review diagnostics and verify the detected game path before starting any installation or repair action.
@@ -54,15 +54,19 @@ Install the .NET 10 SDK. On Linux, from the repository root:
 
 ```bash
 dotnet test "Nolvus Dashboard Linux.sln" --configuration Release
+dotnet test Nolvus.Core.Tests/Nolvus.Core.Tests.csproj --configuration Release
+bash scripts/run-services-regressions-linux.sh
 ./build.sh
 ```
 
-`build.sh` publishes the dashboard only, omits the upstream updater, and refuses to overwrite an existing `~/Desktop/Binaries-<version>.tar.gz` archive.
+The focused Linux services harness uses an isolated D-Bus/GNOME Keyring test home. It requires `dbus-run-session`, `gnome-keyring-daemon`, and `secret-tool` (`libsecret-tools`). `build.sh` publishes the dashboard only, omits the upstream updater, and refuses to overwrite an existing `~/Desktop/Binaries-<version>.tar.gz` archive.
 
 On Windows PowerShell:
 
 ```powershell
 dotnet test 'Nolvus Dashboard Linux.sln' --configuration Release
+dotnet test Nolvus.Core.Tests/Nolvus.Core.Tests.csproj --configuration Release
+dotnet run --project Nolvus.Services.Tests/Nolvus.Services.Tests.csproj --configuration Release
 .\scripts\package-windows.ps1 -OutputDirectory .\artifacts
 ```
 
@@ -70,13 +74,13 @@ The Windows package script validates archive paths and contents, extracts the ge
 
 ## Troubleshooting and recovery
 
-See [Installation](docs/INSTALLATION.md), [Troubleshooting](docs/TROUBLESHOOTING.md), and [Release process](docs/RELEASING.md). Preserve your original package and configuration backups until the new build is known to start. To roll back a failed preview test, exit NKNOVA and remove only the new extracted NKNOVA directory that you created. Do not delete the Steam library, game directory, Nolvus instance, or shared download cache as a generic troubleshooting step.
+See [Installation](docs/INSTALLATION.md), [Troubleshooting](docs/TROUBLESHOOTING.md), [Credential storage](docs/CREDENTIALS.md), and [Release process](docs/RELEASING.md). Preserve your original package and configuration backups until the new build is known to start. To roll back a failed preview test, exit NKNOVA and remove only the new extracted NKNOVA directory that you created. Do not delete the Steam library, game directory, Nolvus instance, or shared download cache as a generic troubleshooting step.
 
 ## Licensing and attribution
 
 NKNOVA source code is distributed under GPL-3.0. See [LICENSE](LICENSE) and retain upstream attribution. Nolvus, Skyrim, Steam, Proton, Nexus Mods, Avalonia, and Six Labors products are third-party names and software governed by their respective terms. No game assets are redistributed by NKNOVA.
 
-ImageSharp 3.1.12 remains in use while maintainers evaluate an upgrade. The current Six Labors advisories identify ImageSharp 3.2.0 as patched for the affected v3 lines and 4.1.2 or later for the affected v4 lines. Direct references to ImageSharp 3.2.0 and later require a valid Six Labors license at build time. Any community license is application-based; no key is embedded in this repository or release. See the official [Six Labors licensing page](https://sixlabors.com/pricing/) and [ImageSharp license documentation](https://docs.sixlabors.com/articles/imagesharp/) before changing the package version.
+ImageSharp 3.1.12 remains in use while maintainers evaluate the existing v4.1.3 candidate. Five advisories affect this version; the Sep 15, 2026 advisory set lists 4.1.2 as patched, so v3.2.0 is not sufficient for the full set. Direct references to ImageSharp 3.2.0 and later require a valid Six Labors license at build time. No community-license application has been submitted and no key is present. An authorized maintainer must apply with the exact assemblies and store any approved key as a private GitHub Actions secret, never in tracked files. See the official [ImageSharp license/build docs](https://docs.sixlabors.com/articles/imagesharp/) and [v4.1.3 release notes](https://github.com/SixLabors/ImageSharp/releases/tag/v4.1.3).
 
 ## Credits
 

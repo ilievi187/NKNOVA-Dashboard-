@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -12,6 +13,8 @@ namespace Nolvus.Services.Settings
 {
     public class SettingsService : ISettingsService
     {
+        private static readonly object AtomicWriteLock = new();
+
         public const string IniFile = "NolvusDashboard.ini";
         public const string ProcessSection = "Process";
         public const string Count = "Count";
@@ -28,13 +31,34 @@ namespace Nolvus.Services.Settings
 
         public void StoreIniValue(string Section, string Parameter, string Value)
         {
-            var Parser = new FileIniDataParser();
+            UpdateIniFileAtomically(IniFile, data => data[Section][Parameter] = Value);
+        }
 
-            IniData Data = Parser.ReadFile(IniFile);
+        public static void UpdateIniFileAtomically(string filePath, Action<IniData> update)
+        {
+            ArgumentNullException.ThrowIfNull(update);
+            lock (AtomicWriteLock)
+            {
+                var Parser = new FileIniDataParser();
 
-            Data[Section][Parameter] = Value;
+                IniData Data = Parser.ReadFile(filePath);
+                update(Data);
 
-            Parser.WriteFile(IniFile, Data);
+                WriteTextAtomicallyCore(filePath, SerializeIniData(Data));
+            }
+        }
+
+        private static string SerializeIniData(IniData data)
+        {
+            using var memory = new MemoryStream();
+            using (var writer = new StreamWriter(memory, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), 1024, leaveOpen: true))
+            {
+                var streamParser = new StreamIniDataParser(new IniParser.Parser.IniDataParser());
+                streamParser.WriteData(writer, data);
+                writer.Flush();
+            }
+
+            return Encoding.UTF8.GetString(memory.ToArray());
         }
 
         public void StoreIniValue(string File, string Section, string Parameter, string Value)
@@ -46,6 +70,66 @@ namespace Nolvus.Services.Settings
             Data[Section][Parameter] = Value;
 
             Parser.WriteFile(File, Data);
+        }
+
+        /// <summary>
+        /// Replaces a settings file only after its complete contents are flushed to a sibling temporary file.
+        /// On Unix the temporary file is owner-readable and owner-writable only.
+        /// </summary>
+        public static void WriteTextAtomically(string filePath, string contents)
+        {
+            lock (AtomicWriteLock)
+                WriteTextAtomicallyCore(filePath, contents);
+        }
+
+        private static void WriteTextAtomicallyCore(string filePath, string contents)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+                throw new ArgumentException("A settings file path is required.", nameof(filePath));
+            ArgumentNullException.ThrowIfNull(contents);
+
+            string fullPath = Path.GetFullPath(filePath);
+            string directory = Path.GetDirectoryName(fullPath)
+                ?? throw new IOException("Settings file path has no parent directory.");
+            if (!Directory.Exists(directory))
+                throw new DirectoryNotFoundException("Settings directory does not exist; existing settings were not changed.");
+
+            string temporaryPath = Path.Combine(
+                directory,
+                $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
+            try
+            {
+                using (var stream = new FileStream(
+                           temporaryPath,
+                           FileMode.CreateNew,
+                           FileAccess.Write,
+                           FileShare.None,
+                           4096,
+                           FileOptions.WriteThrough))
+                {
+                    if (!OperatingSystem.IsWindows())
+                        File.SetUnixFileMode(temporaryPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+
+                    using (var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false), 1024, leaveOpen: true))
+                    {
+                        writer.Write(contents);
+                        writer.Flush();
+                    }
+
+                    stream.Flush(flushToDisk: true);
+                }
+
+                var destination = new FileInfo(fullPath);
+                if (destination.LinkTarget is not null)
+                    throw new IOException("Settings destination must not be a symbolic link or reparse point.");
+
+                File.Move(temporaryPath, fullPath, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath))
+                    File.Delete(temporaryPath);
+            }
         }
 
         public string GetIniValue(string Section, string Parameter)

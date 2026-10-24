@@ -100,7 +100,7 @@ foreach ($document in @('README.md', 'CHANGELOG.md', 'THIRD-PARTY-NOTICES.md')) 
 }
 $documentationDirectory = Join-Path $publishDirectory 'docs'
 New-Item -ItemType Directory -Path $documentationDirectory -Force | Out-Null
-foreach ($document in @('INSTALLATION.md', 'TROUBLESHOOTING.md', 'RELEASING.md')) {
+foreach ($document in @('INSTALLATION.md', 'TROUBLESHOOTING.md', 'CREDENTIALS.md', 'RELEASING.md')) {
     Copy-Item -LiteralPath (Join-Path $repositoryRoot "docs/$document") -Destination $documentationDirectory
 }
 Get-ChildItem -LiteralPath $publishDirectory -Recurse -File -Filter '*.pdb' | Remove-Item -Force
@@ -129,7 +129,7 @@ try {
     if (-not ($entries -contains 'NolvusDashboard.exe')) {
         throw 'The Windows archive is missing NolvusDashboard.exe.'
     }
-    foreach ($requiredFile in @('LICENSE', 'THIRD-PARTY-NOTICES.md', 'docs/INSTALLATION.md', 'docs/TROUBLESHOOTING.md')) {
+    foreach ($requiredFile in @('LICENSE', 'THIRD-PARTY-NOTICES.md', 'docs/INSTALLATION.md', 'docs/TROUBLESHOOTING.md', 'docs/CREDENTIALS.md')) {
         if (-not ($entries -contains $requiredFile)) {
             throw "The Windows archive is missing required documentation: $requiredFile"
         }

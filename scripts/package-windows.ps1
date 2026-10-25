@@ -129,7 +129,7 @@ if (Test-Path -LiteralPath (Join-Path $publishDirectory 'NolvusLauncher.exe')) {
 }
 
 $unexpectedFiles = Get-ChildItem -LiteralPath $publishDirectory -Recurse -File |
-    Where-Object { $_.Extension -in @('.pdb', '.esp', '.esm', '.bsa') -or $_.Name -eq 'SkyrimSE.exe' }
+    Where-Object { $_.Extension -in @('.pdb', '.esp', '.esm', '.bsa') -or $_.Name -in @('SkyrimSE.exe', 'NolvusUpdater.exe', 'NolvusLauncher.exe') }
 if ($unexpectedFiles.Count -gt 0) {
     throw "Unexpected debug symbols or game data found: $($unexpectedFiles.FullName -join ', ')"
 }
@@ -151,7 +151,7 @@ try {
             throw "Unsafe path in Windows archive: $entry"
         }
     }
-    if ($entries | Where-Object { $_ -match '\.pdb$|\.esp$|\.esm$|\.bsa$|(^|/)SkyrimSE\.exe$|(^|/)NolvusLauncher\.exe$' }) {
+    if ($entries | Where-Object { $_ -match '\.pdb$|\.esp$|\.esm$|\.bsa$|(^|/)(SkyrimSE|NolvusUpdater|NolvusLauncher)\.exe$' }) {
         throw 'The Windows release archive contains debug symbols or game data.'
     }
 }

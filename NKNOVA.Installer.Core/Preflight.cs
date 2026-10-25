@@ -113,8 +113,31 @@ public static class InstallerPlanner
             }
             var source = Path.Combine(archives, component.ArchiveFile!);
             var exists = File.Exists(source);
-            steps.Add(new(component.Id, "Check authorized archive for " + component.Version, exists,
-                exists ? null : "Missing user archive: " + source));
+            bool verified = exists;
+            string? blocker = exists ? null : "Missing user archive: " + source;
+            if (exists && component.Sha256 is not null)
+            {
+                // A declared digest is a security requirement, not metadata:
+                // do not mark an archive READY until its bytes match.
+                try
+                {
+                    using var input = File.OpenRead(source);
+                    var actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(input));
+                    verified = string.Equals(actual, component.Sha256, StringComparison.OrdinalIgnoreCase);
+                    if (!verified) blocker = "Archive SHA256 mismatch: " + component.Id;
+                }
+                catch (IOException)
+                {
+                    verified = false;
+                    blocker = "Archive could not be read: " + component.Id;
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    verified = false;
+                    blocker = "Archive access denied: " + component.Id;
+                }
+            }
+            steps.Add(new(component.Id, "Check authorized archive for " + component.Version, verified, blocker));
         }
         return new PreflightPlan(steps);
     }

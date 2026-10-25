@@ -78,6 +78,8 @@ public static class ManifestValidation
                 throw new InvalidDataException("Invalid user archive filename.");
             if (item.SourceKind == "upstream-dashboard" && item.ArchiveFile is not null)
                 throw new InvalidDataException("Upstream component cannot specify an archive.");
+            if (item.SourceKind == "upstream-dashboard" && item.Sha256 is not null)
+                throw new InvalidDataException("Upstream component cannot specify an archive digest.");
             if (item.Sha256 is not null && !HashPattern.IsMatch(item.Sha256))
                 throw new InvalidDataException("Invalid archive SHA256.");
             if (item.Dependencies is null) throw new InvalidDataException("Null dependency list.");

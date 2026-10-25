@@ -180,15 +180,25 @@ try {
     }
 }
 finally {
-    # Always stop the isolated smoke-test process tree, including when the assertion fails.
-    $process.Refresh()
-    if (-not $process.HasExited) {
-        & taskkill.exe /PID $process.Id /T /F | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warning "Unable to stop the Windows dashboard smoke-test process tree (PID $($process.Id))."
+    # A leftover smoke-test process can keep files or user-profile state in use.
+    # Treat failed cleanup as a packaging failure rather than claiming a clean test.
+    try {
+        $process.Refresh()
+        if (-not $process.HasExited) {
+            & taskkill.exe /PID $process.Id /T /F | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw "Could not stop the Windows dashboard smoke-test process tree (PID $($process.Id))."
+            }
+            $null = $process.WaitForExit(10000)
+            $process.Refresh()
+            if (-not $process.HasExited) {
+                throw "Windows dashboard smoke-test process (PID $($process.Id)) remained alive after taskkill."
+            }
         }
     }
-    $process.Dispose()
+    finally {
+        $process.Dispose()
+    }
 }
 
 "$hash  $(Split-Path -Leaf $archivePath)" | Set-Content -LiteralPath $checksumPath -Encoding ascii

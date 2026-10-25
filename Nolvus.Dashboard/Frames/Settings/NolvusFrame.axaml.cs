@@ -13,29 +13,6 @@ namespace Nolvus.Dashboard.Frames.Settings
 {
     public partial class NolvusFrame : DashboardFrame
     {
-        private const string IniFile = @"[Path]
-GamePath={0}
-
-[Nexus]
-ApiKey={1}
-UserAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.75 Safari/537.36
-
-[Nolvus]
-Version=v1
-UserName={2}
-Password={3}
-UserAgent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.75 Safari/537.36 Edge/18.19582
-
-[Process]
-Count = {4}
-Retry = 3
-ErrorsThreshold = 50
-
-[Misc]
-ForceAA=False
-RefreshInterval=10
-";
-
         public NolvusFrame(IDashboard dashboard, FrameParameters parameters)
             : base(dashboard, parameters)
         {
@@ -123,17 +100,14 @@ RefreshInterval=10
                     string nolvusPassword = SettingsCache.NolvusPassword;
 
                     await Task.Run(() =>
-                    {
-                        string settingsContents = string.Format(
-                            IniFile,
+                        Nolvus.Services.Settings.SettingsService.WriteFreshSettingsAtomically(
+                            settingsPath,
                             gameDirectory,
-                            ServiceSingleton.Lib.EncryptString(nexusApiKey),
+                            nexusApiKey,
                             nolvusUser,
-                            ServiceSingleton.Lib.EncryptString(nolvusPassword),
-                            Environment.ProcessorCount);
-
-                        Nolvus.Services.Settings.SettingsService.WriteTextAtomically(settingsPath, settingsContents);
-                    });
+                            nolvusPassword,
+                            Environment.ProcessorCount,
+                            ServiceSingleton.Lib));
                 }
                 catch
                 {

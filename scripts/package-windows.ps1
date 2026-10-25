@@ -172,12 +172,24 @@ $env:LOCALAPPDATA = Join-Path $smokeHome 'AppData/Local'
 New-Item -ItemType Directory -Path $env:APPDATA,$env:LOCALAPPDATA -Force | Out-Null
 
 $process = Start-Process -FilePath $extractedAppHost -WorkingDirectory $extractionDirectory -PassThru
-Start-Sleep -Seconds 15
-$process.Refresh()
-if ($process.HasExited) {
-    throw "Windows dashboard exited during startup smoke test (exit code $($process.ExitCode))."
+try {
+    Start-Sleep -Seconds 15
+    $process.Refresh()
+    if ($process.HasExited) {
+        throw "Windows dashboard exited during startup smoke test (exit code $($process.ExitCode))."
+    }
 }
-& taskkill.exe /PID $process.Id /T /F | Out-Null
+finally {
+    # Always stop the isolated smoke-test process tree, including when the assertion fails.
+    $process.Refresh()
+    if (-not $process.HasExited) {
+        & taskkill.exe /PID $process.Id /T /F | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Unable to stop the Windows dashboard smoke-test process tree (PID $($process.Id))."
+        }
+    }
+    $process.Dispose()
+}
 
 "$hash  $(Split-Path -Leaf $archivePath)" | Set-Content -LiteralPath $checksumPath -Encoding ascii
 Write-Output "Windows archive validated: $archivePath"

@@ -12,8 +12,9 @@
 
 ### Remaining release blockers
 
-- Existing legacy credentials remain in their original format until users explicitly re-enter and save them. Windows credential regression tests passed on GitHub Actions at commit `2839c27` (Windows services and preview validation, 2026-10-25); this does not establish a real-user Windows credential migration or end-to-end installer test.
-- CodeQL C# and Actions jobs completed successfully at commit `2839c27`, but successful analysis execution does not prove that the known legacy TripleDES-ECB alert is resolved. Review the actual code-scanning alert state and remediate it before public release.
+- Existing legacy credentials remain in their original format until users explicitly re-enter and save them. PR #29 head `13130e0` passed Windows/Linux CI and preview packaging/startup smoke jobs on 2026-10-25; this does not establish real-user credential migration, a full GUI test, or an end-to-end Nolvus installation.
+- At PR #29 head `13130e0`, the GitHub Advanced Security aggregate `CodeQL` check is **failure**, despite successful `CodeQL (csharp)`, `CodeQL (actions)`, and `CodeQL (rust)` jobs. The legacy TripleDES-ECB alert is not remediated. A successful analysis job must never be used to dismiss the security finding.
+- Draft PR #30 proposes a fail-closed auto-merge gate for the aggregate `CodeQL` result and verifies the reporting GitHub App. It requires manual review, passing checks, and safe merge before this protection is active on `main`.
 - ImageSharp 3.1.12 remains affected by five current advisories. The preserved v4.1.3 dependency candidate needs an approved Six Labors community key in a private CI secret and cross-platform validation before it can be applied.
 - No complete live Nolvus installation has been performed.
 

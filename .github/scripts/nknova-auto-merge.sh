@@ -29,6 +29,7 @@ required_checks=(
     "Detect Rust sources"
     "CodeQL (actions)"
     "CodeQL (csharp)"
+    "CodeQL" # GitHub code-scanning aggregate: analysis success alone does not clear findings.
     "CodeQL (rust)"
     "Dependency Manifest Gate"
 )

@@ -28,6 +28,38 @@ MustFail(() => ManifestValidation.Check(missing), "unknown dependency");
 var digest = Manifest.Load(file);
 digest.Components[1].Sha256 = "not-a-sha";
 MustFail(() => ManifestValidation.Check(digest), "hash");
+// Read-only Steam discovery must not accept a manifest that escapes common/.
+var syntheticHome = Directory.CreateTempSubdirectory("nknova-steam-probe-");
+try
+{
+    var steamRoot = Path.Combine(syntheticHome.FullName, ".local", "share", "Steam");
+    var steamapps = Path.Combine(steamRoot, "steamapps");
+    var common = Path.Combine(steamapps, "common");
+    Directory.CreateDirectory(common);
+
+    var outsideGame = Path.Combine(steamRoot, "outside-game");
+    Directory.CreateDirectory(outsideGame);
+    File.WriteAllText(Path.Combine(outsideGame, manifest.Game.Executable), "synthetic fixture");
+    var appManifest = Path.Combine(steamapps, $"appmanifest_{manifest.Game.SteamAppId}.acf");
+    File.WriteAllText(appManifest, "\"installdir\" \"../../outside-game\"");
+
+    var rejected = LinuxProbe.Scan(manifest, syntheticHome.FullName);
+    Check(rejected.GamePath is null, "Steam discovery must reject escaping installdir");
+
+    var installedGame = Path.Combine(common, "OwnedSkyrim");
+    Directory.CreateDirectory(installedGame);
+    File.WriteAllText(Path.Combine(installedGame, manifest.Game.Executable), "synthetic fixture");
+    File.WriteAllText(appManifest, "\"installdir\" \"OwnedSkyrim\"");
+
+    var accepted = LinuxProbe.Scan(manifest, syntheticHome.FullName);
+    Check(string.Equals(accepted.GamePath, installedGame, StringComparison.Ordinal),
+        "Steam discovery must accept a safe direct child of steamapps/common");
+}
+finally
+{
+    syntheticHome.Delete(recursive: true);
+}
+
 Console.WriteLine("PASS: NKNOVA manifest validation, dependency sorting, read-only plan.");
 return;
 

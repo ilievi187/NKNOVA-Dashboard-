@@ -119,6 +119,11 @@ namespace Nolvus.Services.Settings
                     stream.Flush(flushToDisk: true);
                 }
 
+                // Windows reports access denied when moving a file over a directory,
+                // whereas Unix may report an I/O error. Reject it consistently.
+                if (Directory.Exists(fullPath))
+                    throw new IOException("Settings destination must be a file, not a directory.");
+
                 var destination = new FileInfo(fullPath);
                 if (destination.LinkTarget is not null)
                     throw new IOException("Settings destination must not be a symbolic link or reparse point.");

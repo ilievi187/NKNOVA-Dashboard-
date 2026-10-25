@@ -264,7 +264,7 @@ jobs:
           - A complete live Nolvus installation was not performed. Use a separate backed-up test installation and do not overwrite a valuable modlist.
           - Automatic upstream self-update is disabled. Install later NKNOVA packages manually.
           - ImageSharp 3.1.12 remains in use. Official advisories identify 3.2.0 as patched for affected v3 lines and 4.1.2 or later for v4 lines; direct references require an approved Six Labors license at build time. The license application is not complete, so this draft is not public.
-          - Existing Nolvus/Mega passwords use inherited reversible client-side obfuscation, not secure at-rest protection. No user credentials are included in this package; a compatible OS/user-scoped migration remains needed before stable release.
+          - Newly saved credentials use authenticated AES-GCM with Windows user-scoped DPAPI or Linux Secret Service key storage. Legacy TripleDES-ECB values remain readable but are not silently migrated; users must explicitly re-enter and save old passwords. The legacy decrypt path has an unresolved CodeQL finding and needs review before any public release. No user credentials are included in this package.
           - .NET 10 runtime is required. Full Nolvus installation support on Windows has not been demonstrated.
           EOF
           printf '\n## Changelog\n\n' >> "$RUNNER_TEMP/preview-notes.md"

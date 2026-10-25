@@ -33,7 +33,11 @@ public static class LinuxProbe
                     var text = File.ReadAllText(path);
                     var match = Regex.Match(text, "\"installdir\"\\s*\"([^\"]+)\"");
                     if (!match.Success) continue;
-                    var candidate = Path.Combine(library, "steamapps/common", match.Groups[1].Value);
+                    string installDirectory = match.Groups[1].Value;
+                    // Steam manifests are external input: never let an install name
+                    // escape the selected library's steamapps/common directory.
+                    if (!SafeSteamInstallDirectoryName(installDirectory)) continue;
+                    var candidate = Path.Combine(library, "steamapps/common", installDirectory);
                     if (!File.Exists(Path.Combine(candidate, manifest.Game.Executable))) continue;
                     game = candidate;
                     break;
@@ -51,6 +55,12 @@ public static class LinuxProbe
         }.FirstOrDefault(File.Exists);
         return new RuntimeState(game, proton, fluorine, OnPath("Xwayland"));
     }
+
+    private static bool SafeSteamInstallDirectoryName(string? name) =>
+        !string.IsNullOrWhiteSpace(name) &&
+        name is not "." and not ".." &&
+        string.Equals(name, Path.GetFileName(name), StringComparison.Ordinal) &&
+        !name.Any(c => char.IsControl(c) || c == '/' || c == '\\' || c == ':');
 
     private static IEnumerable<string> EnumerateLibraries(string root)
     {

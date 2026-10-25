@@ -149,6 +149,12 @@ internal static class Program
                 throw new Exception("FAILED: first-run settings leaked a secret or lost a protected credential.");
             }
 
+            // Explicit-path updates must use the same atomic, restricted save path.
+            settings.StoreIniValue(freshIni, "Nexus", "UserAgent", "NKNOVA isolated test agent");
+            if (!string.Equals(settings.GetIniValue(freshIni, "Nexus", "UserAgent"),
+                               "NKNOVA isolated test agent", StringComparison.Ordinal))
+                throw new Exception("FAILED: explicit-path settings update did not persist.");
+
             bool iniInjectionRejected = false;
             var rejectedIni = Path.Combine(temporaryRoot.FullName, "rejected.ini");
             try
@@ -202,6 +208,24 @@ internal static class Program
 
                 if (!linkRejected || !string.Equals(File.ReadAllText(targetIni), "synthetic original target", StringComparison.Ordinal))
                     throw new Exception("FAILED: atomic settings save followed a configuration symlink.");
+
+                // Regression: the explicit-file overload must not bypass this guard.
+                const string linkedOriginal = "[Nexus]\\nApiKey=synthetic original value\\n";
+                File.WriteAllText(targetIni, linkedOriginal.Replace("\\n", Environment.NewLine));
+                var explicitPathLinkRejected = false;
+                try
+                {
+                    settings.StoreIniValue(linkedIni, "Nexus", "ApiKey", "synthetic replacement");
+                }
+                catch (IOException)
+                {
+                    explicitPathLinkRejected = true;
+                }
+
+                if (!explicitPathLinkRejected ||
+                    !string.Equals(File.ReadAllText(targetIni),
+                                   linkedOriginal.Replace("\\n", Environment.NewLine), StringComparison.Ordinal))
+                    throw new Exception("FAILED: explicit-path settings update followed a configuration symlink.");
             }
         }
         finally

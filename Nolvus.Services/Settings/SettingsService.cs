@@ -121,13 +121,9 @@ namespace Nolvus.Services.Settings
 
         public void StoreIniValue(string File, string Section, string Parameter, string Value)
         {
-            var Parser = new FileIniDataParser();
-
-            IniData Data = Parser.ReadFile(File);
-
-            Data[Section][Parameter] = Value;
-
-            Parser.WriteFile(File, Data);
+            // The explicit-path overload must enforce the same atomic-write and
+            // symlink protections as the default settings overload.
+            UpdateIniFileAtomically(File, data => data[Section][Parameter] = Value);
         }
 
         /// <summary>

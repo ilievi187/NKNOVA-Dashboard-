@@ -161,8 +161,12 @@ for number in "${prs[@]}"; do
     checks=$(gh api "repos/${repo}/commits/${head_sha}/check-runs?per_page=100")
     ready=true
     for context in "${required_checks[@]}"; do
-        check_state=$(jq -r --arg name "$context" '
-            ([.check_runs[] | select(.name == $name)] | sort_by(.started_at // .created_at // "") | last // {}) as $check
+        expected_app="github-actions"
+        if [[ "$context" == "CodeQL" ]]; then
+            expected_app="github-advanced-security"
+        fi
+        check_state=$(jq -r --arg name "$context" --arg expected_app "$expected_app" '
+            ([.check_runs[] | select(.name == $name and .app.slug == $expected_app)] | sort_by(.started_at // .created_at // "") | last // {}) as $check
             | if $check.status == "completed" then ($check.conclusion // "") else ($check.status // "missing") end
         ' <<<"$checks")
         if [[ "$context" == "CodeQL (rust)" && "$check_state" == "skipped" ]]; then

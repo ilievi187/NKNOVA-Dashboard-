@@ -48,6 +48,64 @@ namespace Nolvus.Services.Settings
             }
         }
 
+        /// <summary>
+        /// Creates a new dashboard settings file. Raw passwords and API keys never
+        /// enter the serialized INI; encryption must succeed before any file write.
+        /// </summary>
+        public static void WriteFreshSettingsAtomically(
+            string filePath,
+            string gameDirectory,
+            string nexusApiKey,
+            string nolvusUserName,
+            string nolvusPassword,
+            int processorCount,
+            ILibService credentialService)
+        {
+            ArgumentNullException.ThrowIfNull(credentialService);
+            if (string.IsNullOrEmpty(nolvusPassword))
+                throw new ArgumentException("A Nolvus password is required.", nameof(nolvusPassword));
+            if (processorCount < 1)
+                throw new ArgumentOutOfRangeException(nameof(processorCount));
+
+            // Never let a user-provided line break become an extra INI key or section.
+            foreach (var value in new[] { gameDirectory, nexusApiKey, nolvusUserName, nolvusPassword })
+            {
+                if (value is null || value.IndexOfAny(new[] { '\r', '\n', '\0' }) >= 0)
+                    throw new ArgumentException("A settings field contains an invalid control character.");
+            }
+
+            // Protect both secrets before opening or replacing the destination.
+            string encryptedNexus = credentialService.EncryptString(nexusApiKey);
+            string encryptedNolvus = credentialService.EncryptString(nolvusPassword);
+            if ((!string.IsNullOrEmpty(nexusApiKey) &&
+                 !encryptedNexus.StartsWith("nknova:v3:", StringComparison.Ordinal)) ||
+                !encryptedNolvus.StartsWith("nknova:v3:", StringComparison.Ordinal))
+            {
+                throw new InvalidDataException("Credential protection did not produce a current encrypted envelope.");
+            }
+
+            var data = new IniData();
+            foreach (string section in new[] { "Path", "Nexus", "Nolvus", "Process", "Misc" })
+                data.Sections.AddSection(section);
+
+            data["Path"]["GamePath"] = gameDirectory;
+            data["Nexus"]["ApiKey"] = encryptedNexus;
+            data["Nexus"]["UserAgent"] =
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.75 Safari/537.36";
+            data["Nolvus"]["Version"] = "v1";
+            data["Nolvus"]["UserName"] = nolvusUserName;
+            data["Nolvus"]["Password"] = encryptedNolvus;
+            data["Nolvus"]["UserAgent"] =
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.75 Safari/537.36 Edge/18.19582";
+            data["Process"]["Count"] = processorCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            data["Process"]["Retry"] = "3";
+            data["Process"]["ErrorsThreshold"] = "50";
+            data["Misc"]["ForceAA"] = "False";
+            data["Misc"]["RefreshInterval"] = "10";
+
+            WriteTextAtomically(filePath, SerializeIniData(data));
+        }
+
         private static string SerializeIniData(IniData data)
         {
             using var memory = new MemoryStream();

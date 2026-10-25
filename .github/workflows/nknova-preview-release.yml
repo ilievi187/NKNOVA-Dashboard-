@@ -172,6 +172,27 @@ jobs:
         run: dotnet test Nolvus.Core.Tests/Nolvus.Core.Tests.csproj --configuration Release
       - name: Run service regressions
         run: dotnet run --project Nolvus.Services.Tests/Nolvus.Services.Tests.csproj --configuration Release
+      - name: Reject unsafe or mismatched Windows package versions
+        shell: pwsh
+        run: |
+          $output = Join-Path $env:RUNNER_TEMP 'nknova-rejected-version'
+          foreach ($case in @(
+            @{ Version = '../escape'; Expected = 'Invalid package version' },
+            @{ Version = '9.9.9'; Expected = 'does not match Dashboard project version' }
+          )) {
+            $rejected = $false
+            try {
+              & .\scripts\package-windows.ps1 -OutputDirectory $output -Version $case.Version
+            }
+            catch {
+              if ($_.Exception.Message -notmatch $case.Expected) { throw }
+              $rejected = $true
+            }
+            if (-not $rejected) { throw "Unsafe/mismatched version was accepted: $($case.Version)" }
+          }
+          if (Test-Path -LiteralPath $output) {
+            throw 'Rejected versions unexpectedly created an output directory.'
+          }
       - name: Publish, package, validate, and smoke-test extracted Windows UI
         shell: pwsh
         run: .\scripts\package-windows.ps1 -OutputDirectory "$env:RUNNER_TEMP\nknova-windows-dist" -Version "${{ steps.version.outputs.version }}"

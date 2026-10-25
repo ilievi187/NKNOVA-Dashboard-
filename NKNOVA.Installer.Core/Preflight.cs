@@ -137,6 +137,15 @@ public static class InstallerPlanner
                     blocker = "Archive access denied: " + component.Id;
                 }
             }
+            // A dependency that is not ready blocks its consumers, even if their
+            // own archives exist. Ordered() guarantees prerequisites precede users.
+            var blockedDependency = component.Dependencies.FirstOrDefault(id =>
+                steps.Any(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase) && !s.Ready));
+            if (blockedDependency is not null)
+            {
+                verified = false;
+                blocker = "Dependency not ready: " + blockedDependency;
+            }
             steps.Add(new(component.Id, "Check authorized archive for " + component.Version, verified, blocker));
         }
         return new PreflightPlan(steps);

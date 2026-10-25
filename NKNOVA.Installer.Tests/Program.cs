@@ -34,6 +34,8 @@ try
 {
     var hashManifest = Manifest.Load(file);
     var component = hashManifest.Components.First(x => x.SourceKind == "user-archive");
+    // Isolate archive integrity from upstream adapter readiness.
+    component.Dependencies.Clear();
     var archivePath = Path.Combine(archiveSandbox.FullName, component.ArchiveFile!);
     File.WriteAllText(archivePath, "synthetic authorized archive fixture");
     component.Sha256 = Convert.ToHexString(
@@ -43,6 +45,14 @@ try
         new RuntimeState(null, null, null, false), archiveSandbox.FullName);
     Check(verifiedPlan.Steps.Single(x => x.Id == component.Id).Ready,
         "matching archive SHA256 should pass");
+
+    // The same valid archive must be blocked when its prerequisite is unavailable.
+    component.Dependencies.Add("nolvus-awakening");
+    var dependentPlan = InstallerPlanner.Build(hashManifest,
+        new RuntimeState(null, null, null, false), archiveSandbox.FullName);
+    Check(!dependentPlan.Steps.Single(x => x.Id == component.Id).Ready,
+        "ready archive must be blocked by an unready prerequisite");
+    component.Dependencies.Clear();
 
     File.AppendAllText(archivePath, "tampered");
     var rejectedPlan = InstallerPlanner.Build(hashManifest,

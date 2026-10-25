@@ -28,6 +28,10 @@ MustFail(() => ManifestValidation.Check(missing), "unknown dependency");
 var digest = Manifest.Load(file);
 digest.Components[1].Sha256 = "not-a-sha";
 MustFail(() => ManifestValidation.Check(digest), "hash");
+var upstreamDigest = Manifest.Load(file);
+upstreamDigest.Components.First(x => x.SourceKind == "upstream-dashboard").Sha256 =
+    new string('a', 64);
+MustFail(() => ManifestValidation.Check(upstreamDigest), "upstream digest without archive");
 // An archive with a declared SHA256 must not be accepted merely because it exists.
 var archiveSandbox = Directory.CreateTempSubdirectory("nknova-archive-digest-");
 try

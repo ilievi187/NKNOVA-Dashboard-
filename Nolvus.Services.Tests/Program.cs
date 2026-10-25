@@ -131,6 +131,40 @@ internal static class Program
                 throw new Exception("FAILED: credential settings were not persisted with owner-only permissions.");
             }
 
+            // A first-run INI must only contain protected credential envelopes.
+            var freshIni = Path.Combine(temporaryRoot.FullName, "fresh-nolvus.ini");
+            const string firstRunPassword = "synthetic first-run Nolvus password";
+            SettingsService.WriteFreshSettingsAtomically(
+                freshIni, "C:/synthetic/Skyrim", newNexusKey,
+                "synthetic-user", firstRunPassword, 8, lib);
+
+            string freshContents = File.ReadAllText(freshIni);
+            if (freshContents.Contains(newNexusKey, StringComparison.Ordinal) ||
+                freshContents.Contains(firstRunPassword, StringComparison.Ordinal) ||
+                !string.Equals(settings.GetIniValue(freshIni, "Nolvus", "UserName"), "synthetic-user", StringComparison.Ordinal) ||
+                !string.Equals(settings.GetIniValue(freshIni, "Path", "GamePath"), "C:/synthetic/Skyrim", StringComparison.Ordinal) ||
+                !string.Equals(lib.DecryptString(settings.GetIniValue(freshIni, "Nexus", "ApiKey")), newNexusKey, StringComparison.Ordinal) ||
+                !string.Equals(lib.DecryptString(settings.GetIniValue(freshIni, "Nolvus", "Password")), firstRunPassword, StringComparison.Ordinal))
+            {
+                throw new Exception("FAILED: first-run settings leaked a secret or lost a protected credential.");
+            }
+
+            bool iniInjectionRejected = false;
+            var rejectedIni = Path.Combine(temporaryRoot.FullName, "rejected.ini");
+            try
+            {
+                SettingsService.WriteFreshSettingsAtomically(
+                    rejectedIni, "C:/synthetic/Skyrim", newNexusKey,
+                    "synthetic-user\\n[Malicious]", firstRunPassword, 8, lib);
+            }
+            catch (ArgumentException)
+            {
+                iniInjectionRejected = true;
+            }
+
+            if (!iniInjectionRejected || File.Exists(rejectedIni))
+                throw new Exception("FAILED: first-run INI accepted a control character or created a partial file.");
+
             var directoryDestination = Path.Combine(temporaryRoot.FullName, "leave-this-directory");
             Directory.CreateDirectory(directoryDestination);
             bool invalidDestinationRejected = false;

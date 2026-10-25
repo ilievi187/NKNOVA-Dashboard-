@@ -28,6 +28,33 @@ MustFail(() => ManifestValidation.Check(missing), "unknown dependency");
 var digest = Manifest.Load(file);
 digest.Components[1].Sha256 = "not-a-sha";
 MustFail(() => ManifestValidation.Check(digest), "hash");
+// An archive with a declared SHA256 must not be accepted merely because it exists.
+var archiveSandbox = Directory.CreateTempSubdirectory("nknova-archive-digest-");
+try
+{
+    var hashManifest = Manifest.Load(file);
+    var component = hashManifest.Components.First(x => x.SourceKind == "user-archive");
+    var archivePath = Path.Combine(archiveSandbox.FullName, component.ArchiveFile!);
+    File.WriteAllText(archivePath, "synthetic authorized archive fixture");
+    component.Sha256 = Convert.ToHexString(
+        System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(archivePath)));
+
+    var verifiedPlan = InstallerPlanner.Build(hashManifest,
+        new RuntimeState(null, null, null, false), archiveSandbox.FullName);
+    Check(verifiedPlan.Steps.Single(x => x.Id == component.Id).Ready,
+        "matching archive SHA256 should pass");
+
+    File.AppendAllText(archivePath, "tampered");
+    var rejectedPlan = InstallerPlanner.Build(hashManifest,
+        new RuntimeState(null, null, null, false), archiveSandbox.FullName);
+    Check(!rejectedPlan.Steps.Single(x => x.Id == component.Id).Ready,
+        "modified archive must fail SHA256 preflight");
+}
+finally
+{
+    archiveSandbox.Delete(recursive: true);
+}
+
 // Read-only Steam discovery must not accept a manifest that escapes common/.
 var syntheticHome = Directory.CreateTempSubdirectory("nknova-steam-probe-");
 try

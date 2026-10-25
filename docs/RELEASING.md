@@ -25,7 +25,7 @@ Only tag a commit already on protected `main` after its pull request and require
 
 Before changing the draft to a public pre-release, a maintainer must verify all of the following:
 
-1. Required Linux, Windows, and security checks passed on the exact tag commit.
+1. Required Linux, Windows, and security checks passed on the exact tag commit. In particular, verify the **aggregate `CodeQL` check reported by the `github-advanced-security` GitHub App** is `success` on that exact commit, not merely the `CodeQL (csharp)` / `CodeQL (actions)` / `CodeQL (rust)` workflow jobs. Confirm that the active repository code-scanning ruleset has no unresolved blocking findings; never dismiss a genuine finding to make a release pass.
 2. Uploaded asset hashes match the CI-generated packages.
 3. No unresolved critical/high findings affect shipped behavior; any finding dismissed as unreachable must be mapped to the actual call graph and reviewed before closure.
 4. The ImageSharp advisories have been fixed with a compatible licensed package or a reachable-code mitigation has been independently reviewed and documented.

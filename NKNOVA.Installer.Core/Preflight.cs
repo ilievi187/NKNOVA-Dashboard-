@@ -144,7 +144,9 @@ public static class InstallerPlanner
             if (blockedDependency is not null)
             {
                 verified = false;
-                blocker = "Dependency not ready: " + blockedDependency;
+                blocker = blocker is null
+                    ? "Dependency not ready: " + blockedDependency
+                    : blocker + "; dependency not ready: " + blockedDependency;
             }
             steps.Add(new(component.Id, "Check authorized archive for " + component.Version, verified, blocker));
         }

@@ -155,7 +155,8 @@ internal static class Program
             {
                 SettingsService.WriteFreshSettingsAtomically(
                     rejectedIni, "C:/synthetic/Skyrim", newNexusKey,
-                    "synthetic-user\\n[Malicious]", firstRunPassword, 8, lib);
+                    "synthetic-user" + Environment.NewLine + "[UnexpectedSection]",
+                    firstRunPassword, 8, lib);
             }
             catch (ArgumentException)
             {

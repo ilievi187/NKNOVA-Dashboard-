@@ -79,7 +79,30 @@ wait_for_main_workflow() {
     return 1
 }
 
+# Fail closed if the repository's code-scanning alert inventory cannot be read.
+# Aggregate CodeQL success only proves the PR introduced no newly-blocking alert;
+# it does not certify that pre-existing alerts are resolved.
+ensure_no_open_code_scanning_alerts() {
+    local pages open_count
+    if ! pages=$(gh api --paginate --slurp "repos/${repo}/code-scanning/alerts?state=open&per_page=100"); then
+        echo "Cannot read code-scanning alerts; refusing automatic merge."
+        return 1
+    fi
+
+    if ! jq -e 'type == "array" and all(.[]; type == "array")' <<<"$pages" >/dev/null; then
+        echo "Unexpected code-scanning response; refusing automatic merge."
+        return 1
+    fi
+
+    open_count=$(jq '[.[][] | select(.state == "open")] | length' <<<"$pages")
+    if (( open_count > 0 )); then
+        echo "Found ${open_count} unresolved code-scanning alerts; manual security review and merge required."
+        return 1
+    fi
+}
+
 ensure_main_healthy
+ensure_no_open_code_scanning_alerts
 
 prs_json=$(gh pr list --repo "$repo" --state open --base main --limit 100 \
     --json number,createdAt,author,isDraft,baseRefName,headRepository,headRepositoryOwner)

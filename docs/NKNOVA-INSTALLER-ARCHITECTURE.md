@@ -9,6 +9,10 @@ This is a GPL-3.0 fork of sableeyed/NolvusDashboard. Preserve original author cr
   schema, and malformed SHA256 pins.
 - Read-only discovery of Steam Skyrim installation, pinned GE-Proton, Fluorine and XWayland.
 - Command-line preflight plan. This NEVER writes game files or runs the game.
+- User-provided archives are READY only when present **and** their bytes match a pinned
+  SHA-256 digest. An archive without a digest stays BLOCKED even when the file exists.
+  The example manifest intentionally omits real archive hashes until authorized
+  artifacts are supplied; never invent hashes to make a preflight pass.
 - Basic standalone tests and GitHub Actions compilation.
 
 ## Not implemented yet

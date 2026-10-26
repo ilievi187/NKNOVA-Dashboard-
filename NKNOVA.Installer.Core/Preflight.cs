@@ -113,8 +113,14 @@ public static class InstallerPlanner
             }
             var source = Path.Combine(archives, component.ArchiveFile!);
             var exists = File.Exists(source);
-            bool verified = exists;
-            string? blocker = exists ? null : "Missing user archive: " + source;
+            // A filename alone is not proof of archive integrity. A user archive
+            // must have a pinned digest before preflight can mark it READY.
+            bool verified = false;
+            string? blocker = !exists
+                ? "Missing user archive: " + source
+                : component.Sha256 is null
+                    ? "Missing SHA256 pin for user archive: " + component.Id
+                    : null;
             if (exists && component.Sha256 is not null)
             {
                 // A declared digest is a security requirement, not metadata:

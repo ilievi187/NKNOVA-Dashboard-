@@ -356,6 +356,33 @@ internal static class Program
             if (Directory.Exists(legacyDirectory))
                 throw new Exception("FAILED: reading a legacy credential silently created or migrated credential storage.");
 
+            // Legacy read compatibility must reject malformed or oversized inputs without
+            // writing a key or touching the existing settings file.
+            string[] invalidLegacyValues =
+            {
+                "bad",
+                "%%%%",
+                Convert.ToBase64String(new byte[7]),
+                new string('A', 24 * 1024 + 4)
+            };
+            foreach (string invalidLegacyValue in invalidLegacyValues)
+            {
+                bool rejected = false;
+                try
+                {
+                    _ = legacyService.DecryptString(invalidLegacyValue);
+                }
+                catch (CryptographicException)
+                {
+                    rejected = true;
+                }
+
+                if (!rejected)
+                    throw new Exception("FAILED: malformed or oversized legacy credential was accepted.");
+                if (Directory.Exists(legacyDirectory))
+                    throw new Exception("FAILED: invalid legacy credential created key storage.");
+            }
+
             if (!OperatingSystem.IsWindows())
             {
                 const UnixFileMode groupOrOther = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |

@@ -223,8 +223,8 @@ for number in "${prs[@]}"; do
         continue
     fi
 
-    echo "All required checks passed for trusted owner PR #${number} at ${head_sha}. Requesting a normal squash merge with no admin bypass."
-    if ! gh pr merge "$number" --repo "$repo" --squash; then
+    echo "All required checks passed for trusted owner PR #${number} at ${head_sha}. Requesting a SHA-locked squash merge with no admin bypass."
+    if ! gh pr merge "$number" --repo "$repo" --squash --match-head-commit "$head_sha"; then
         echo "GitHub refused PR #${number}; branch protection or a newer conflict remains. Leaving it open."
         continue
     fi

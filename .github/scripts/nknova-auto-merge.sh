@@ -89,8 +89,8 @@ ensure_no_open_code_scanning_alerts() {
         return 1
     fi
 
-    if ! jq -e 'type == "array" and all(.[]; type == "array")' <<<"$pages" >/dev/null; then
-        echo "Unexpected code-scanning response; refusing automatic merge."
+    if ! jq -e 'type == "array" and all(.[]; type == "array" and all(.[]; type == "object" and .state == "open"))' <<<"$pages" >/dev/null; then
+        echo "Unexpected code-scanning response or non-open alert state; refusing automatic merge."
         return 1
     fi
 

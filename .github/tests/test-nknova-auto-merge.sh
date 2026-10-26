@@ -142,11 +142,11 @@ run_check_case spoof_after_failure "waiting for required check 'CodeQL'"
 run_sha_locked_merge_case() {
     local status=0 marker="$tmp/merge-match-head-marker"
     rm -f "$marker"
-    PATH="$tmp/bin:$PATH" GH_REPO="ilievi187/NKNOVA-Dashboard-" \\
-        NKNOVA_AUTO_MERGE_DRY_RUN=false NKNOVA_ALERT_FIXTURE=clean \\
-        NKNOVA_CHECK_FIXTURE=success NKNOVA_MERGE_MATCH_MARKER="$marker" \\
+    PATH="$tmp/bin:$PATH" GH_REPO="ilievi187/NKNOVA-Dashboard-" \
+        NKNOVA_AUTO_MERGE_DRY_RUN=false NKNOVA_ALERT_FIXTURE=clean \
+        NKNOVA_CHECK_FIXTURE=success NKNOVA_MERGE_MATCH_MARKER="$marker" \
         bash "$root/.github/scripts/nknova-auto-merge.sh" >"$tmp/merge-sha-guard.log" 2>&1 || status=$?
-    if [[ "$status" -ne 0 || ! -f "$marker" ]] || \\
+    if [[ "$status" -ne 0 || ! -f "$marker" ]] || \
        ! grep -Fq 'GitHub refused PR #7' "$tmp/merge-sha-guard.log"; then
         echo "FAILED: merge was not SHA-locked or stale-head refusal was not handled:" >&2
         cat "$tmp/merge-sha-guard.log" >&2

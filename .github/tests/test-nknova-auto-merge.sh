@@ -28,7 +28,35 @@ case "$*" in
             *) exit 99;;
         esac;;
     "pr list "*)
-        echo '[]';;
+        if [[ -n "${NKNOVA_CHECK_FIXTURE:-}" ]]; then
+            echo '[{"number":7,"createdAt":"2026-10-26T00:00:00Z","author":{"login":"ilievi187"},"isDraft":false,"baseRefName":"main","headRepository":{"nameWithOwner":"ilievi187/NKNOVA-Dashboard-"},"headRepositoryOwner":{"login":"ilievi187"}}]'
+        else
+            echo '[]'
+        fi;;
+    "pr view 7 --repo ilievi187/NKNOVA-Dashboard- --json headRefOid --jq .headRefOid")
+        echo 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';;
+    "pr view 7 --repo ilievi187/NKNOVA-Dashboard- --json "*)
+        echo '{"number":7,"state":"OPEN","isDraft":false,"author":{"login":"ilievi187"},"body":"[x] I reviewed source provenance and license attribution for this change.","baseRefName":"main","headRefOid":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","headRepository":{"nameWithOwner":"ilievi187/NKNOVA-Dashboard-"},"headRepositoryOwner":{"login":"ilievi187"},"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","files":[]}';;
+    "api repos/ilievi187/NKNOVA-Dashboard-/commits/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/check-runs?per_page=100")
+        jq -n --arg fixture "$NKNOVA_CHECK_FIXTURE" '
+          ["Package tests (ubuntu-latest)", "Package tests (windows-latest)",
+           "Linux solution build and package", "Linux solution test, build and package",
+           "ExecutableResolver tests (ubuntu-latest)", "ExecutableResolver tests (windows-latest)",
+           "Services redaction regression (ubuntu-latest)", "Services redaction regression (windows-latest)",
+           "Detect Rust sources", "CodeQL (actions)", "CodeQL (csharp)", "CodeQL",
+           "CodeQL (rust)", "Dependency Manifest Gate"]
+          | map({name: ., status: "completed", conclusion: "success",
+                 app: {slug: (if . == "CodeQL" then "github-advanced-security" else "github-actions" end)}})
+          | if $fixture == "missing" then map(select(.name != "CodeQL"))
+            elif $fixture == "spoof" then map(if .name == "CodeQL" then .app.slug = "github-actions" else . end)
+            elif $fixture == "workflow_spoof" then map(if .name == "CodeQL (csharp)" then .app.slug = "untrusted-app" else . end)
+            elif $fixture == "failed" then map(if .name == "CodeQL" then .conclusion = "failure" else . end)
+            elif $fixture == "pending" then map(if .name == "CodeQL" then .status = "in_progress" else . end)
+            elif $fixture == "rust_skip" then map(if .name == "CodeQL (rust)" then .conclusion = "skipped" else . end)
+            elif $fixture == "spoof_after_failure" then
+              (map(if .name == "CodeQL" then .conclusion = "failure" else . end)
+               + [{name: "CodeQL", status: "completed", conclusion: "success", app: {slug: "github-actions"}}])
+            else . end | {check_runs: .}';;
     *)
         echo "Unexpected mocked gh invocation: $*" >&2
         exit 98;;
@@ -60,3 +88,28 @@ run_case missing_state fail
 run_case wrong_state fail
 run_case invalid_entry fail
 run_case error fail
+
+# These cases exercise the real PR check gate with mocked check-run provenance.
+# All runs are dry-run; a blocked PR is expected to exit 0 after being skipped.
+run_check_case() {
+    local fixture="$1" expected="$2" status=0
+    PATH="$tmp/bin:$PATH" GH_REPO="ilievi187/NKNOVA-Dashboard-" \
+        NKNOVA_AUTO_MERGE_DRY_RUN=true NKNOVA_ALERT_FIXTURE=clean \
+        NKNOVA_CHECK_FIXTURE="$fixture" \
+        bash "$root/.github/scripts/nknova-auto-merge.sh" >"$tmp/check-$fixture.log" 2>&1 || status=$?
+    if [[ "$status" -ne 0 ]] || ! grep -Fq -- "$expected" "$tmp/check-$fixture.log"; then
+        echo "Unexpected result for check-run fixture $fixture (exit $status):" >&2
+        cat "$tmp/check-$fixture.log" >&2
+        exit 1
+    fi
+    echo "PASS: check-run $fixture"
+}
+
+run_check_case success "DRY RUN: PR #7 is eligible"
+run_check_case rust_skip "DRY RUN: PR #7 is eligible"
+run_check_case missing "waiting for required check 'CodeQL'"
+run_check_case spoof "waiting for required check 'CodeQL'"
+run_check_case workflow_spoof "waiting for required check 'CodeQL (csharp)'"
+run_check_case failed "waiting for required check 'CodeQL'"
+run_check_case pending "waiting for required check 'CodeQL'"
+run_check_case spoof_after_failure "waiting for required check 'CodeQL'"

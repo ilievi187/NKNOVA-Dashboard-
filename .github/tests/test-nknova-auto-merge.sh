@@ -17,6 +17,18 @@ case "$*" in
     "api --paginate --slurp repos/ilievi187/NKNOVA-Dashboard-/code-scanning/alerts?state=open&per_page=100")
         case "${NKNOVA_ALERT_FIXTURE:-}" in
             clean) echo '[[]]';;
+            appeared)
+                # Simulate a new finding between the initial inventory and the merge decision.
+                count=0
+                if [[ -f "${NKNOVA_ALERT_STATE_FILE:-/dev/null}" ]]; then
+                    read -r count < "$NKNOVA_ALERT_STATE_FILE"
+                fi
+                printf '%s\n' "$((count + 1))" > "$NKNOVA_ALERT_STATE_FILE"
+                if (( count == 0 )); then
+                    echo '[[]]'
+                else
+                    echo '[[{"state":"open","number":43}]]'
+                fi;;
             empty_slurp) echo '[]';;
             null_page) echo '[null]';;
             open) echo '[[{"state":"open","number":42}]]';;
@@ -92,9 +104,14 @@ run_case error fail
 # These cases exercise the real PR check gate with mocked check-run provenance.
 # All runs are dry-run; a blocked PR is expected to exit 0 after being skipped.
 run_check_case() {
-    local fixture="$1" expected="$2" status=0
+    local fixture="$1" expected="$2" status=0 alert_fixture=clean
+    if [[ "$fixture" == "late_alert" ]]; then
+        alert_fixture=appeared
+    fi
+    rm -f "$tmp/alert-counter-$fixture"
     PATH="$tmp/bin:$PATH" GH_REPO="ilievi187/NKNOVA-Dashboard-" \
-        NKNOVA_AUTO_MERGE_DRY_RUN=true NKNOVA_ALERT_FIXTURE=clean \
+        NKNOVA_AUTO_MERGE_DRY_RUN=true NKNOVA_ALERT_FIXTURE="$alert_fixture" \
+        NKNOVA_ALERT_STATE_FILE="$tmp/alert-counter-$fixture" \
         NKNOVA_CHECK_FIXTURE="$fixture" \
         bash "$root/.github/scripts/nknova-auto-merge.sh" >"$tmp/check-$fixture.log" 2>&1 || status=$?
     if [[ "$status" -ne 0 ]] || ! grep -Fq -- "$expected" "$tmp/check-$fixture.log"; then
@@ -106,6 +123,7 @@ run_check_case() {
 }
 
 run_check_case success "DRY RUN: PR #7 is eligible"
+run_check_case late_alert "Skipping PR #7: code-scanning alerts appeared or could not be rechecked."
 run_check_case rust_skip "waiting for required check 'CodeQL (rust)'"
 run_check_case missing "waiting for required check 'CodeQL'"
 run_check_case spoof "waiting for required check 'CodeQL'"

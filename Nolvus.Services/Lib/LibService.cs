@@ -195,6 +195,25 @@ namespace Nolvus.Services.Lib
 
         private static string DecryptLegacyString(string value)
         {
+            // Legacy compatibility only. Bound untrusted input before allocating or decrypting.
+            // Legacy saves used Convert.ToBase64String without whitespace or line wrapping.
+            const int maximumLegacyCiphertextChars = 24 * 1024;
+            if (value.Length > maximumLegacyCiphertextChars || value.Length % 4 != 0)
+                throw new CryptographicException("Invalid legacy credential encoding.");
+
+            byte[] input;
+            try
+            {
+                input = Convert.FromBase64String(value);
+            }
+            catch (FormatException ex)
+            {
+                throw new CryptographicException("Invalid legacy credential encoding.", ex);
+            }
+
+            if (input.Length == 0 || input.Length % 8 != 0)
+                throw new CryptographicException("Invalid legacy credential length.");
+
             string key = "1F2CAB925HFBBCAE589632FABC547892";
             string iv = "ACtEDg70CcU=";
 
@@ -205,8 +224,6 @@ namespace Nolvus.Services.Lib
             tripleDes.Padding = PaddingMode.PKCS7;
 
             using var decryptor = tripleDes.CreateDecryptor(tripleDes.Key, tripleDes.IV);
-            var input = Convert.FromBase64String(value);
-
             using var ms = new MemoryStream();
             using (var cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Write))
             {

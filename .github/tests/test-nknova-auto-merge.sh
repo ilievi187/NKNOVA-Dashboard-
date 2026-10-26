@@ -19,6 +19,9 @@ case "$*" in
             clean) echo '[[]]';;
             open) echo '[[{"state":"open","number":42}]]';;
             malformed) echo '{"unexpected":"response"}';;
+            missing_state) echo '[[{"number":42}]]';;
+            wrong_state) echo '[[{"state":"dismissed","number":42}]]';;
+            invalid_entry) echo '[["not-an-alert-object"]]';;
             error) exit 22;;
             *) exit 99;;
         esac;;
@@ -49,4 +52,7 @@ bash -n "$root/.github/scripts/nknova-auto-merge.sh"
 run_case clean pass
 run_case open fail
 run_case malformed fail
+run_case missing_state fail
+run_case wrong_state fail
+run_case invalid_entry fail
 run_case error fail

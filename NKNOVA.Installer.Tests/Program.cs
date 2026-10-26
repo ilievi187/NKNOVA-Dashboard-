@@ -28,6 +28,13 @@ MustFail(() => ManifestValidation.Check(missing), "unknown dependency");
 var digest = Manifest.Load(file);
 digest.Components[1].Sha256 = "not-a-sha";
 MustFail(() => ManifestValidation.Check(digest), "hash");
+var newlineId = Manifest.Load(file);
+newlineId.Id += "\n";
+MustFail(() => ManifestValidation.Check(newlineId), "ID with trailing newline");
+var newlineHash = Manifest.Load(file);
+newlineHash.Components.First(x => x.SourceKind == "user-archive").Sha256 =
+    new string('a', 64) + "\n";
+MustFail(() => ManifestValidation.Check(newlineHash), "SHA256 with trailing newline");
 var upstreamDigest = Manifest.Load(file);
 upstreamDigest.Components.First(x => x.SourceKind == "upstream-dashboard").Sha256 =
     new string('a', 64);

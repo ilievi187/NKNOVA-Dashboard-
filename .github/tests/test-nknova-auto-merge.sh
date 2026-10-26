@@ -106,7 +106,7 @@ run_check_case() {
 }
 
 run_check_case success "DRY RUN: PR #7 is eligible"
-run_check_case rust_skip "DRY RUN: PR #7 is eligible"
+run_check_case rust_skip "waiting for required check 'CodeQL (rust)'"
 run_check_case missing "waiting for required check 'CodeQL'"
 run_check_case spoof "waiting for required check 'CodeQL'"
 run_check_case workflow_spoof "waiting for required check 'CodeQL (csharp)'"

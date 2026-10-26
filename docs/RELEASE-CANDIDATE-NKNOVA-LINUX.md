@@ -7,7 +7,7 @@
 - .NET 9 CLI with schema-v1 JSON manifest, dependency ordering and strict input validation.
 - Read-only discovery of Steam Skyrim, GE-Proton, Fluorine and XWayland.
 - Steam `installdir` path-traversal rejection.
-- Optional SHA-256 verification of user-provided archives; mismatch, unreadable files, and unavailable dependencies block readiness.
+- Mandatory SHA-256 verification for user-provided archives before READY: missing digest, mismatch, unreadable files, and unavailable dependencies block readiness. The example manifest deliberately omits real archive hashes and remains BLOCKED until authorized files are pinned.
 - No Steam, Skyrim, Proton, saves, MO2 or game-file writes. No automatic downloads or game launch.
 
 ## Developer smoke test

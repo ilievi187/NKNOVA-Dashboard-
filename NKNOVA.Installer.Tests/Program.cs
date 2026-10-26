@@ -42,6 +42,14 @@ try
     component.Dependencies.Clear();
     var archivePath = Path.Combine(archiveSandbox.FullName, component.ArchiveFile!);
     File.WriteAllText(archivePath, "synthetic authorized archive fixture");
+
+    // Existing but unpinned bytes must never count as a verified archive.
+    var unpinnedPlan = InstallerPlanner.Build(hashManifest,
+        new RuntimeState(null, null, null, false), archiveSandbox.FullName);
+    var unpinnedStep = unpinnedPlan.Steps.Single(x => x.Id == component.Id);
+    Check(!unpinnedStep.Ready && unpinnedStep.Blocker?.Contains("SHA256 pin") == true,
+        "existing user archive without a SHA256 pin must remain blocked");
+
     component.Sha256 = Convert.ToHexString(
         System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(archivePath)));
 

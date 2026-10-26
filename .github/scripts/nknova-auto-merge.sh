@@ -210,6 +210,14 @@ for number in "${prs[@]}"; do
         continue
     fi
 
+    # A new code-scanning alert may have appeared since the initial inventory.
+    # Recheck immediately before the merge decision; fail closed on API errors.
+    # GitHub's protected-branch rules remain the final authoritative gate.
+    if ! ensure_no_open_code_scanning_alerts; then
+        echo "Skipping PR #${number}: code-scanning alerts appeared or could not be rechecked."
+        continue
+    fi
+
     if [[ "$dry_run" == "true" ]]; then
         echo "DRY RUN: PR #${number} is eligible for a squash merge at ${head_sha}; no merge requested."
         continue

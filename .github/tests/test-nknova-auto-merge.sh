@@ -17,6 +17,8 @@ case "$*" in
     "api --paginate --slurp repos/ilievi187/NKNOVA-Dashboard-/code-scanning/alerts?state=open&per_page=100")
         case "${NKNOVA_ALERT_FIXTURE:-}" in
             clean) echo '[[]]';;
+            empty_slurp) echo '[]';;
+            null_page) echo '[null]';;
             open) echo '[[{"state":"open","number":42}]]';;
             malformed) echo '{"unexpected":"response"}';;
             missing_state) echo '[[{"number":42}]]';;
@@ -50,6 +52,8 @@ run_case() {
 
 bash -n "$root/.github/scripts/nknova-auto-merge.sh"
 run_case clean pass
+run_case empty_slurp fail
+run_case null_page fail
 run_case open fail
 run_case malformed fail
 run_case missing_state fail

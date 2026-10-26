@@ -69,6 +69,11 @@ case "$*" in
               (map(if .name == "CodeQL" then .conclusion = "failure" else . end)
                + [{name: "CodeQL", status: "completed", conclusion: "success", app: {slug: "github-actions"}}])
             else . end | {check_runs: .}';;
+    "pr merge 7 --repo ilievi187/NKNOVA-Dashboard- --squash --match-head-commit bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+        # A changed PR head must make GitHub reject the SHA-locked merge.
+        printf "sha-guard-used\n" > "${NKNOVA_MERGE_MATCH_MARKER:?}"
+        echo "Simulated GitHub rejection: PR head changed" >&2
+        exit 1;;
     *)
         echo "Unexpected mocked gh invocation: $*" >&2
         exit 98;;
@@ -131,3 +136,22 @@ run_check_case workflow_spoof "waiting for required check 'CodeQL (csharp)'"
 run_check_case failed "waiting for required check 'CodeQL'"
 run_check_case pending "waiting for required check 'CodeQL'"
 run_check_case spoof_after_failure "waiting for required check 'CodeQL'"
+
+# Exercise the non-dry-run merge command against a refusing mock. The exact
+# --match-head-commit SHA is required to reach this mock case; no live merge occurs.
+run_sha_locked_merge_case() {
+    local status=0 marker="$tmp/merge-match-head-marker"
+    rm -f "$marker"
+    PATH="$tmp/bin:$PATH" GH_REPO="ilievi187/NKNOVA-Dashboard-" \\
+        NKNOVA_AUTO_MERGE_DRY_RUN=false NKNOVA_ALERT_FIXTURE=clean \\
+        NKNOVA_CHECK_FIXTURE=success NKNOVA_MERGE_MATCH_MARKER="$marker" \\
+        bash "$root/.github/scripts/nknova-auto-merge.sh" >"$tmp/merge-sha-guard.log" 2>&1 || status=$?
+    if [[ "$status" -ne 0 || ! -f "$marker" ]] || \\
+       ! grep -Fq 'GitHub refused PR #7' "$tmp/merge-sha-guard.log"; then
+        echo "FAILED: merge was not SHA-locked or stale-head refusal was not handled:" >&2
+        cat "$tmp/merge-sha-guard.log" >&2
+        exit 1
+    fi
+    echo "PASS: SHA-locked merge request safely rejects a changed PR head"
+}
+run_sha_locked_merge_case

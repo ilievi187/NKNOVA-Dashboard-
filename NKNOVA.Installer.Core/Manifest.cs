@@ -49,8 +49,9 @@ public sealed class ComponentSpec
 }
 public static class ManifestValidation
 {
-    private static readonly Regex IdPattern = new("^[A-Za-z0-9][A-Za-z0-9_.-]*$", RegexOptions.CultureInvariant);
-    private static readonly Regex HashPattern = new("^[0-9a-fA-F]{64}$", RegexOptions.CultureInvariant);
+    // \\z is a strict end-of-input anchor; $ can match before a final newline.
+    private static readonly Regex IdPattern = new(@"\A[A-Za-z0-9][A-Za-z0-9_.-]*\z", RegexOptions.CultureInvariant);
+    private static readonly Regex HashPattern = new(@"\A[0-9a-fA-F]{64}\z", RegexOptions.CultureInvariant);
     public static void Check(Manifest manifest)
     {
         ValidateId(manifest.Id);

@@ -34,3 +34,52 @@ If NKNOVA reports that Secret Service is unavailable, unlock the user's desktop 
 ## Test boundaries
 
 The Linux regression harness creates a unique synthetic keyring scope, tests save/read across service instances, then clears only that synthetic item. Windows CI tests the DPAPI code path using temporary test data. These tests do not read real user credentials, change a game installation, or prove that a full Nolvus installation works.
+
+## Legacy TripleDES-ECB retirement gate (planned; NOT implemented)
+
+**Security status, 2026-10-26:** GitHub CodeQL review on PR #29 identifies
+`Encryption using ECB` at `Nolvus.Services/Lib/LibService.cs:204`
+([alert #5](https://github.com/ilievi187/NKNOVA-Dashboard-/security/code-scanning/5)).
+Its review thread is unresolved. `DecryptLegacyString` still uses fixed-key
+TripleDES/ECB for reading old Nolvus/Mega credentials. New saves use AES-GCM,
+but that does **not** remediate the existing legacy read path. Never dismiss
+this finding or interpret successful CodeQL analysis jobs as a clean aggregate
+CodeQL result. Public release remains blocked.
+
+The following is an **implementation and acceptance plan**, not a claim that
+migration, retirement, or end-to-end tests have been completed:
+
+1. **Inventory and consent.** In an isolated test environment, classify each
+   Nolvus/Mega/Nexus credential as legacy ECB, legacy plaintext, v2 AES-GCM,
+   current v3, missing, or malformed. Never print raw values or keys. Require
+   an explicit user action before changing existing stored credentials; a
+   successful read alone must not rewrite anything.
+2. **Recoverable backup.** Before an owner-approved migration, preserve the
+   complete original INI and the *matching* per-user key material using the
+   platform's supported DPAPI/profile or Secret Service backup mechanism.
+   If a backup cannot be made or verified, do not change the INI or keyring.
+   Do not place backups, credentials, or keys in CI artifacts or logs.
+3. **Atomic migration.** Decrypt only the selected legacy values in memory,
+   re-encrypt with the current user's v3 key, and verify each result by
+   decrypting it before committing. Preserve unrelated INI sections, enforce
+   existing symlink/path and restrictive-permission checks, flush a sibling
+   temporary file, then atomically replace the INI. On any failure, retain
+   the original values and allow safe recovery without partial migration.
+4. **Mixed-version support.** Prove that an INI containing a mixture of ECB,
+   plaintext Nexus, v2 and v3 credentials remains readable before migration,
+   and that user-initiated migration changes only intended values. Missing or
+   inaccessible DPAPI/Secret Service keys must fail closed; do not generate a
+   replacement key when existing encrypted values require the old one.
+5. **Acceptance tests.** Run synthetic, isolated Windows DPAPI and Linux
+   Secret Service tests for success, cancellation, bad ciphertext, locked
+   keyring, wrong user/profile, missing key, interrupted/failed atomic write,
+   symlinked target, mixed formats, backup/restore and log redaction. Verify
+   the original INI is byte-for-byte unchanged on every failed attempt.
+6. **Retire and verify.** Remove the ECB decryption path only after an approved
+   compatibility/deprecation decision and proof that supported installations
+   can recover or migrate their legacy values. Rerun all required CI and the
+   authentic aggregate CodeQL check on the exact PR head; verify the ECB alert
+   is resolved by a real code change, not by dismissal or relaxed rules.
+
+The ImageSharp advisories, Six Labors licensing and live installer acceptance
+are **independent** release blockers even after the ECB issue is fixed.

@@ -23,7 +23,7 @@ NKNOVA is a GPL-3.0-licensed community fork of the Avalonia-based Nolvus Dashboa
 - Redux, Ultimate, Ultra, Graphics-only, ENB, and Community Shaders availability depends on the actual upstream service/API and installed configuration. The preview does not promise all variants are installable.
 - No new, standalone Rust installer or custom one-click installation backend is included.
 - RAM/CPU/download resource-limit controls and interruption recovery are not claimed unless the current UI/backend explicitly enforces them.
-- This branch proposes upgrading ImageSharp from 3.1.12 to security-backported 3.2.0 under the maintainer's assembly-scoped Six Labors Community license. **The issued `sixlabors.lic` must still be added and verified** before builds can pass; see [license instructions](docs/SIXLABORS-LICENSE.md). The public preview remains blocked until licensing, advisories, and acceptance gates are satisfied.
+- This branch proposes upgrading ImageSharp from 3.1.12 to security-backported 3.2.0 under the maintainer's assembly-scoped Six Labors Community license. **The original vendor-issued `sixlabors.lic` is now committed to the upgrade branch and requires build-time scope verification**; see [license instructions](docs/SIXLABORS-LICENSE.md). The public preview remains blocked until licensing, advisories, and acceptance gates are satisfied.
 - Existing Nolvus/Mega account settings use inherited reversible client-side obfuscation with a built-in key, not secure credential storage. No user credential is bundled, but testers should not rely on it to protect passwords from local access. A backward-compatible OS/user-scoped storage migration is required before a stable release.
 
 ## Downloads

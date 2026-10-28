@@ -11,7 +11,6 @@ using Nolvus.Core.Utils;
 using Nolvus.Core.Enums;
 using Nolvus.StockGame.Core;
 using Nolvus.StockGame.Meta;
-using Nolvus.Core.Utils;
 
 namespace Nolvus.StockGame.Patcher
 {

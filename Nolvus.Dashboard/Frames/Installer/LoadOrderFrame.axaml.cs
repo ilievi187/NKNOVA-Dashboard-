@@ -44,7 +44,7 @@ namespace Nolvus.Dashboard.Frames.Installer
                 }
                 catch (Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
         }
@@ -92,7 +92,7 @@ namespace Nolvus.Dashboard.Frames.Installer
                 }
                 catch (Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
         }

@@ -335,7 +335,7 @@ namespace Nolvus.Instance.Services
             catch(Exception ex)
             {
                 ServiceSingleton.Logger.Log(string.Format("Error during environment value checking (Key : {0}) with message {1}", Key, ex.Message));
-                throw ex;
+                throw;
             }
 
             return EnvValue;   

@@ -178,7 +178,7 @@ namespace Nolvus.Package.Files
             }
             catch (Exception ex)
             {                
-                throw ex;
+                throw;
             }
         }
 
@@ -208,7 +208,7 @@ namespace Nolvus.Package.Files
                 }
                 catch (Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
         }
@@ -341,7 +341,7 @@ namespace Nolvus.Package.Files
                 catch(Exception ex)
                 {
                     ServiceSingleton.Logger.Log(string.Format("Error during file extract {0} with error {1}", FileName, ex.Message));
-                    throw ex;
+                    throw;
                 }
             });
 

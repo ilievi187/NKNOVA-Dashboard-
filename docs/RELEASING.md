@@ -2,13 +2,13 @@
 
 ## Scope and trust boundary
 
-The `NKNOVA Preview Release Validation` workflow is the release packaging workflow for this candidate. On relevant pull requests it runs solution and focused tests, builds Linux x64 and Windows x64 packages on native GitHub-hosted runners, validates archive contents and SHA-256 files, and smoke-tests each extracted application. On version tags, it creates an unpublished GitHub draft pre-release after both platform jobs pass.
+The `NKNOVA Preview Release Validation` workflow is the release packaging workflow for this candidate. On relevant pull requests it runs solution and focused tests, builds Linux x64 and Windows x64 packages on native GitHub-hosted runners, validates archive contents and SHA-256 files, and smoke-tests each extracted application. On a protected main-branch version bump, it creates an unpublished draft pre-release after both platform jobs pass and the same main commit has successful aggregate C# and Actions CodeQL. Tags also remain supported for a manual release candidate.
 
 A draft is not a stable release or proof that a full Nolvus installation works. Do not publish the draft publicly while any release-blocking security, licensing, or real-install validation gate remains unresolved.
 
 ## Versioning and tagging
 
-The Dashboard project version is the source of truth. A release tag must exactly match it with a `v` prefix, for example `v0.1.0-preview.2` for `<Version>0.1.0-preview.2</Version>`. The workflow checks that the tagged commit is an ancestor of `main`, refuses to overwrite an existing release, and creates a draft pre-release only after both platform jobs pass. The `v0.1.0-preview.1` draft remains unpublished and is superseded by later preview tags.
+The Dashboard project version is the source of truth. A release tag must exactly match it with a `v` prefix, for example `v0.1.0-preview.3` for `<Version>0.1.0-preview.3</Version>`. The workflow checks that the tagged commit is an ancestor of `main`, refuses to overwrite an existing release, and creates a draft pre-release only after both platform jobs pass. The `v0.1.0-preview.1` draft remains unpublished and is superseded by later preview tags.
 
 Only tag a commit already on protected `main` after its pull request and required checks have passed. Never force-push or retarget a release tag. If a tagged build fails, leave the failed run as evidence and issue a new patch preview tag after fixing the cause.
 
@@ -40,15 +40,10 @@ A release is a package, not an updater migration. If a draft is defective, keep 
 
 ## ImageSharp security and licensing
 
-Do not suppress NuGet audit findings or add a key before approval. ImageSharp 3.1.12 is in the affected ranges of multiple current advisories. Official Six Labors advisories identify 3.2.0 as patched for affected v3 lines and 4.1.2 or later for affected v4 lines. The application is currently on 3.1.12; the preserved `fix/imagesharp-security-update` stash contains a proposed 4.1.3 dependency change, but that candidate has not been validated with a license and remains untouched.
+NKNOVA now directly references ImageSharp **3.2.0**, the vendor-supported v3 security backport, and includes the original, publicly committable assembly-scoped Six Labors Community license `sixlabors.lic`, valid through 2028-01-26. Six package changes were reviewed with an exact-match dependency-manifest gate exception. See [SIXLABORS-LICENSE.md](SIXLABORS-LICENSE.md) and [REVIEWED-IMAGESHARP-DEPENDENCY.md](REVIEWED-IMAGESHARP-DEPENDENCY.md). Do not expand this exception to new packages, new versions, or new assemblies without a separate review.
 
-Direct package references to ImageSharp 3.2.0 and later require a Six Labors license at build time. The official application page explicitly accepts open-source/source-available projects and states eligible open-source applications receive a community key automatically. NKNOVA's public GPL-3.0 repository appears to fit that category, but no application has been submitted and no key has been issued or added. The six current direct-reference assembly names to provide are:
+Six Labors ends security maintenance of the ImageSharp v3 line on **12 May 2027**, per its [published support announcement](https://sixlabors.com/posts/security-support-and-license-enforcement/). Plan an independently tested v4 upgrade well before that date.
 
-- `Vcc.Nolvus.Api.Installer`
-- `Nolvus.Components`
-- `Nolvus.Core`
-- `NolvusDashboard`
-- `Nolvus.Package`
-- `Nolvus.Services` (also directly references ImageSharp.Drawing and ImageSharp.Web)
+## Guarded draft automation
 
-The names are case-sensitive. The official docs say an assembly-scoped community key may be committed to the named public project; unrestricted/community keys and commercial keys must remain private. Maintainers must not add an unapproved key or treat this release gate as satisfied until the approved license is in place and all direct-reference builds pass.
+On a new candidate version merged into `main`, the release workflow runs native Windows and Linux packages, tests, checksum checks and 20-second startup smoke tests. It waits for successful C# / Actions CodeQL on the exact commit before creating the *unpublished draft* and its matching version tag. Existing releases or tags are never overwritten. Public publication remains a separate manual decision subject to the acceptance checklist above, including isolated real-install validation and credential-security risk disposition.

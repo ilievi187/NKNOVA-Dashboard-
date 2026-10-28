@@ -23,7 +23,6 @@ namespace Nolvus.Package.Mods
     public abstract class InstallableElement : IInstallableElement
     {
         ModProgress _p = null; 
-        Image _Image = null;       
 
         #region Properties
 

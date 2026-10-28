@@ -161,7 +161,7 @@ namespace Nolvus.Package.Patchers
                         throw new Exception($"Hash for file '{DestinationFileName}' does not match after patch!");
                     }
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     throw;
                 }

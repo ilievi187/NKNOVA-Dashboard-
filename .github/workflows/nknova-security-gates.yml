@@ -138,6 +138,51 @@ jobs:
           done <<<"$changed_paths"
 
           if [[ "$needs_review" == true ]]; then
-            exit 1
+            # Reviewed, narrowly scoped security backport. All other dependency
+            # changes must still fail closed for independent manual review.
+            reviewed_image_upgrade=false
+            if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]] &&
+               [[ -z "$(git diff --name-only "$base" "$GITHUB_SHA" -- .github/workflows/)" ]] &&
+               git cat-file -e "$GITHUB_SHA:sixlabors.lic" 2>/dev/null &&
+               git cat-file -e "$GITHUB_SHA:docs/SIXLABORS-LICENSE.md" 2>/dev/null; then
+              mapfile -t expected < <(printf '%s\n' \
+                Nolvus.Api.Library.Installer/Nolvus.Api.Installer.csproj \
+                Nolvus.Components/Nolvus.Components.csproj \
+                Nolvus.Core/Nolvus.Core.csproj \
+                Nolvus.Dashboard/Nolvus.Dashboard.csproj \
+                Nolvus.Package/Nolvus.Package.csproj \
+                Nolvus.Services/Nolvus.Services.csproj | sort)
+              mapfile -t actual < <(printf '%s\n' "$changed_paths" | grep -E '\.csproj$|\.props$|\.targets$|(^|/)(packages\.lock\.json|packages\.config|Cargo\.toml|Cargo\.lock|NuGet\.config|nuget\.config|global\.json)
+ | sort || true)
+              if [[ " ${actual[*]} " == " Directory.Build.props ${expected[*]} " ]]; then
+                reviewed_image_upgrade=true
+                for path in "${expected[@]}"; do
+                  diff=$(git diff --unified=0 "$base" "$GITHUB_SHA" -- "$path")
+                  mapfile -t package_lines < <(printf '%s\n' "$diff" | grep -E '^[+-][^+-].*<(PackageReference|PackageVersion|PackageDownload)([[:space:]>])' || true)
+                  if [[ "${#package_lines[@]}" -ne 2 ]] ||
+                     [[ "${package_lines[0]}" != '-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />' ]] ||
+                     [[ "${package_lines[1]}" != '+    <PackageReference Include="SixLabors.ImageSharp" Version="3.2.0" />' ]]; then
+                    reviewed_image_upgrade=false
+                    break
+                  fi
+                done
+                props_diff=$(git diff --unified=0 "$base" "$GITHUB_SHA" -- Directory.Build.props)
+                if printf '%s\n' "$props_diff" | grep -Eq '^[+-][^+-].*<(PackageReference|PackageVersion|PackageDownload)([[:space:]>])'; then
+                  reviewed_image_upgrade=false
+                fi
+                license_data=$(git show "$GITHUB_SHA:sixlabors.lic")
+                if [[ "$license_data" != Id=ctm_01m60z2tgq281q060a74zxhx0c\;Kind=Community\;* ]] ||
+                   [[ "$license_data" != *'ExpiryDateUtc=2028-01-26'* ]] ||
+                   [[ "$license_data" != *'Key=Assembly:'* ]]; then
+                  reviewed_image_upgrade=false
+                fi
+              fi
+            fi
+            if [[ "$reviewed_image_upgrade" != true ]]; then
+              echo "Dependency manifest delta outside the specifically reviewed ImageSharp 3.1.12 -> 3.2.0 exemption. Independent review required." >&2
+              exit 1
+            fi
+            echo "Reviewed ImageSharp 3.2.0 security backport: exactly six direct references and vendor-issued scoped license."
+          else
+            echo "No third-party dependency manifests changed; no new dependency license or advisory was introduced."
           fi
-          echo "No third-party dependency manifests changed; no new dependency license or advisory was introduced."

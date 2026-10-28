@@ -150,7 +150,7 @@ namespace Nolvus.StockGame.Patcher
                 catch(Exception ex)
                 {
                     ServiceSingleton.Logger.Log(string.Format("Error during patch file download with message {0}", ex.Message));
-                    throw ex;
+                    throw;
                 }              
             });
 
@@ -346,7 +346,7 @@ namespace Nolvus.StockGame.Patcher
                 }
                 catch(Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
 

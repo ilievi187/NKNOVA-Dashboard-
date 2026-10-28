@@ -96,7 +96,7 @@ namespace Nolvus.Services.ENB
                 }
                 catch(Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
         }
@@ -150,7 +150,7 @@ namespace Nolvus.Services.ENB
                 }
                 catch (Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
 

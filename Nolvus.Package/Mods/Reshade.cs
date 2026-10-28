@@ -130,7 +130,7 @@ WindowRounding=0.000000";
                 catch(Exception ex)
                 {
                     ServiceSingleton.Logger.Log(string.Format("Error during shader download/extract with error {0}", ex.Message));
-                    throw ex;
+                    throw;
                 }
             });
 
@@ -303,7 +303,7 @@ WindowRounding=0.000000";
                     catch (Exception ex)
                     {
                         ServiceSingleton.Logger.Log(string.Format("Error during reshade binaries installation with error {0}", ex.Message));
-                        throw ex;
+                        throw;
                     }
                 }
                 finally

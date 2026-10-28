@@ -224,7 +224,7 @@ namespace Nolvus.Package.Mods
             }
             catch (Exception ex)
             {
-                throw ex;
+                throw;
             }
         }
 
@@ -281,7 +281,7 @@ namespace Nolvus.Package.Mods
                 }
                 catch(Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
 
             });
@@ -381,7 +381,7 @@ namespace Nolvus.Package.Mods
                 Progress.Mbs = 0;
                 Progress.Action = string.Empty;
                 ServiceSingleton.Logger.Log("Error during mod installation(" + Name + ") with message : " + ex.Message + Environment.NewLine + "Stack => " + ex.StackTrace);                    
-                throw ex;
+                throw;
             }
         }
 

@@ -259,7 +259,7 @@ namespace Nolvus.StockGame.Core
                     }
                     catch (Exception ex)
                     {
-                        throw ex;
+                        throw;
                     }
                 }
                 finally
@@ -352,7 +352,7 @@ namespace Nolvus.StockGame.Core
                 }
                 catch (Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
 
@@ -387,7 +387,7 @@ namespace Nolvus.StockGame.Core
                 }
                 catch (Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
 
@@ -420,7 +420,7 @@ namespace Nolvus.StockGame.Core
                 }
                 catch (Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
 
@@ -451,7 +451,7 @@ namespace Nolvus.StockGame.Core
                 }
                 catch (Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
 

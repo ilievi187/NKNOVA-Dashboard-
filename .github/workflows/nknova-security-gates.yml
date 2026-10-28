@@ -152,9 +152,21 @@ jobs:
                 Nolvus.Dashboard/Nolvus.Dashboard.csproj \
                 Nolvus.Package/Nolvus.Package.csproj \
                 Nolvus.Services/Nolvus.Services.csproj | sort)
-              mapfile -t actual < <(printf '%s\n' "$changed_paths" | grep -E '\.csproj$|\.props$|\.targets$|(^|/)(packages\.lock\.json|packages\.config|Cargo\.toml|Cargo\.lock|NuGet\.config|nuget\.config|global\.json)
- | sort || true)
-              if [[ " ${actual[*]} " == " Directory.Build.props ${expected[*]} " ]]; then
+              # PR #33 has an exactly enumerated and reviewed set of ten files.
+              # Any additional changed path fails closed, including lockfiles.
+              mapfile -t actual < <(printf '%s\n' "$changed_paths" | sort)
+              mapfile -t permitted < <(printf '%s\n' \
+                Directory.Build.props \
+                Nolvus.Api.Library.Installer/Nolvus.Api.Installer.csproj \
+                Nolvus.Components/Nolvus.Components.csproj \
+                Nolvus.Core/Nolvus.Core.csproj \
+                Nolvus.Dashboard/Nolvus.Dashboard.csproj \
+                Nolvus.Package/Nolvus.Package.csproj \
+                Nolvus.Services/Nolvus.Services.csproj \
+                README.md \
+                docs/SIXLABORS-LICENSE.md \
+                sixlabors.lic | sort)
+              if [[ "${actual[*]}" == "${permitted[*]}" ]]; then
                 reviewed_image_upgrade=true
                 for path in "${expected[@]}"; do
                   diff=$(git diff --unified=0 "$base" "$GITHUB_SHA" -- "$path")

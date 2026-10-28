@@ -1,6 +1,6 @@
 # Six Labors ImageSharp license and upgrade
 
-This repository uses the [Six Labors Split License](https://github.com/SixLabors/ImageSharp/blob/main/LICENSE) for its ImageSharp dependencies, separately from NKNOVA's GPL-3.0 license. The maintainer received a **Community / assembly-scoped** license on 2026-10-28. The license file itself has not yet been included in this branch.
+This repository uses the [Six Labors Split License](https://github.com/SixLabors/ImageSharp/blob/main/LICENSE) for its ImageSharp dependencies, separately from NKNOVA's GPL-3.0 license. The maintainer received a **Community / assembly-scoped** license on 2026-10-28, expiring 2028-01-26. The original vendor-issued `sixlabors.lic` is included at the repository root on this branch. The license has six assembly signatures; exact assembly binding is validated during the Six Labors build checks.
 
 ## Licensed assemblies
 
@@ -17,7 +17,7 @@ If the contents of the issued `sixlabors.lic` do not cover exactly these assembl
 
 ## Use the issued license
 
-Place the **original, unmodified** `sixlabors.lic` file at the repository root (alongside `Directory.Build.props`). The props file explicitly points the Six Labors build task to it when the file exists. Do not invent a license, change its text, or use a key from another project.
+The **original, unmodified** `sixlabors.lic` file is at the repository root (alongside `Directory.Build.props`). The props file explicitly points the Six Labors build task to it when the file exists. Do not invent a license, change its text, or use a key from another project.
 
 Six Labors expressly permits **assembly-scoped community** licenses to be committed in public open-source repositories, as confirmed in its license email and [documentation](https://docs.sixlabors.com/articles/imagesharp.web/). Do not commit unrestricted keys or commercial keys. For such keys use a private `SIXLABORS_LICENSE_KEY` environment variable or secure build secret instead. `Directory.Build.props` respects an explicitly configured license property.
 

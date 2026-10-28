@@ -1,5 +1,14 @@
 # Change log
 
+## 0.1.0-preview.3 (unpublished security preview draft)
+
+- Upgrade direct ImageSharp references to security-maintained 3.2.0 under the vendor-issued assembly-scoped Six Labors Community license.
+- Preserve NKNOVA's protected dependency review, cross-platform CI, CodeQL, and extracted-app startup smoke validation.
+- Produce an unpublished Windows/Linux preview draft with SHA-256 artifacts after the release checks succeed.
+
+This preview is **not stable**: a complete real Nolvus install has not been demonstrated; legacy Nolvus/Mega credential protection still needs migration. Do not overwrite an existing modlist or publish the draft publicly without an explicit maintainer release acceptance.
+
+
 ## 0.1.0-preview.2 (unpublished draft candidate)
 
 This follow-up candidate supersedes the still-unpublished `v0.1.0-preview.1` draft. It focuses on remote image resource safety and does not change the existing ImageSharp package version.

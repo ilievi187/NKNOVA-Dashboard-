@@ -1,0 +1,40 @@
+name: NKNOVA Installer Core
+on:
+  push:
+    branches:
+      - main
+      - 'develop/**'
+    paths:
+      - 'NKNOVA.Installer.Core/**'
+      - 'NKNOVA.Installer.Cli/**'
+      - 'NKNOVA.Installer.Tests/**'
+      - 'install-profiles/**'
+      - '.github/workflows/nknova-installation.yml'
+  pull_request:
+    paths:
+      - 'NKNOVA.Installer.Core/**'
+      - 'NKNOVA.Installer.Cli/**'
+      - 'NKNOVA.Installer.Tests/**'
+      - 'install-profiles/**'
+      - '.github/workflows/nknova-installation.yml'
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Compile read-only CLI
+        run: dotnet build NKNOVA.Installer.Cli/NKNOVA.Installer.Cli.csproj -c Release
+      - name: Validate manifests, cycles and traversal defenses
+        run: dotnet run --project NKNOVA.Installer.Tests/NKNOVA.Installer.Tests.csproj -c Release
+      - name: Missing external packages must block preflight
+        shell: bash
+        run: |
+          set +e
+          dotnet run --project NKNOVA.Installer.Cli/NKNOVA.Installer.Cli.csproj -c Release -- plan --manifest install-profiles/nknova-linux.example.json --archives /tmp/nknova-empty
+          code=$?
+          test "$code" -eq 1

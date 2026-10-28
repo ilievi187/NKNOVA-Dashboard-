@@ -234,7 +234,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          required='["CodeQL","CodeQL (csharp)","CodeQL (actions)"]'
+          # On protected main pushes, GitHub exposes the language-specific
+          # CodeQL checks, but not the aggregate "CodeQL" result shown on PRs.
+          # Require all three actual security-analysis jobs on this exact SHA.
+          required='["CodeQL (csharp)","CodeQL (actions)","CodeQL (rust)"]'
           for attempt in $(seq 1 60); do
             checks=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100")
             if jq -e '[.check_runs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")] | length > 0' <<< "$checks" >/dev/null; then
@@ -242,7 +245,7 @@ jobs:
               exit 1
             fi
             if jq -e --argjson required "$required" '.check_runs as $runs | all($required[]; . as $n | any($runs[]; .name == $n and .conclusion == "success"))' <<< "$checks" >/dev/null; then
-              echo 'Aggregate and language CodeQL succeeded on release commit.'
+              echo 'All required language-specific CodeQL checks succeeded on exact main release commit.'
               exit 0
             fi
             sleep 10

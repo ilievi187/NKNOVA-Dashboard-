@@ -1,6 +1,6 @@
 # Change log
 
-## Unreleased — Phase 2 security work
+## Unreleased — Phase 2 security work (PR #29)
 
 ### Included
 
@@ -15,8 +15,15 @@
 - Existing legacy credentials remain in their original format until users explicitly re-enter and save them. As of 2026-10-26, PR #29 commit `ac73a1c` passed NKNOVA CI, ExecutableResolver CI, Security Gates, and Preview Release Validation, including Windows/Linux packaging and startup smoke jobs. Four synthetic regressions now reject malformed or oversized legacy ciphertext. This does not establish real-user credential migration, a full GUI test, or an end-to-end Nolvus installation.
 - On 2026-10-26, at PR #29 commit `ac73a1c`, the GitHub Advanced Security aggregate `CodeQL` check remains **failure**, despite successful `CodeQL (csharp)`, `CodeQL (actions)`, and `CodeQL (rust)` jobs. The unresolved TripleDES-ECB finding in `Nolvus.Services/Lib/LibService.cs` is not remediated by input validation. A successful analysis job must never be used to dismiss the security finding.
 - Draft PR #30 proposes a fail-closed auto-merge gate for the aggregate `CodeQL` result and verifies the reporting GitHub App. It requires manual review, passing checks, and safe merge before this protection is active on `main`.
-- ImageSharp 3.1.12 remains affected by five current advisories. The preserved v4.1.3 dependency candidate needs an approved Six Labors community key in a private CI secret and cross-platform validation before it can be applied.
 - No complete live Nolvus installation has been performed.
+
+## 0.1.0-preview.3 (unpublished security preview draft)
+
+- Upgrade direct ImageSharp references to security-maintained 3.2.0 under the vendor-issued assembly-scoped Six Labors Community license.
+- Preserve NKNOVA's protected dependency review, cross-platform CI, CodeQL, and extracted-app startup smoke validation.
+- Produce an unpublished Windows/Linux preview draft with SHA-256 artifacts after the release checks succeed.
+
+This preview is **not stable**: a complete real Nolvus install has not been demonstrated; legacy Nolvus/Mega credential protection still needs migration. Do not overwrite an existing modlist or publish the draft publicly without an explicit maintainer release acceptance.
 
 ## 0.1.0-preview.2 (unpublished draft candidate)
 

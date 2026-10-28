@@ -90,7 +90,7 @@ namespace Nolvus.Services.Files.Downloaders
                     }
                     else
                     {
-                        throw ex;
+                        throw;
                     }
                 }                                 
             });

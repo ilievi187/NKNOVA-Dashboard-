@@ -189,7 +189,7 @@ namespace Nolvus.Package.Services
                 }
                 catch (Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
         }
@@ -209,7 +209,7 @@ namespace Nolvus.Package.Services
                     }
                     catch (Exception ex)
                     {
-                        throw ex;
+                        throw;
                     }
                 }
                 finally
@@ -270,7 +270,7 @@ namespace Nolvus.Package.Services
                 }
                 catch (Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
 
@@ -294,7 +294,7 @@ namespace Nolvus.Package.Services
                     }
                     catch (Exception ex)
                     {
-                        throw ex;
+                        throw;
                     }
                 }
                 finally
@@ -348,7 +348,7 @@ namespace Nolvus.Package.Services
                 }
                 catch (Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
 

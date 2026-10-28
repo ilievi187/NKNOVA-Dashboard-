@@ -23,19 +23,19 @@ NKNOVA is a GPL-3.0-licensed community fork of the Avalonia-based Nolvus Dashboa
 - Redux, Ultimate, Ultra, Graphics-only, ENB, and Community Shaders availability depends on the actual upstream service/API and installed configuration. The preview does not promise all variants are installable.
 - No new, standalone Rust installer or custom one-click installation backend is included.
 - RAM/CPU/download resource-limit controls and interruption recovery are not claimed unless the current UI/backend explicitly enforces them.
-- ImageSharp 3.1.12 remains in six direct-reference projects and generates five distinct NuGet advisories (three high, two moderate). The current September 2026 advisory set identifies 4.1.2 or later as patched; 3.2.0 does not resolve the full set. The preserved v4.1.3 stash is a dependency-only candidate, not validated or applied. A build-time Six Labors license is required for the upgrade, and no application/key has been approved or added. See [Release process](docs/RELEASING.md).
+- ImageSharp 3.2.0 is now used under the vendor-issued assembly-scoped Community license (`sixlabors.lic`), with successful Windows/Linux builds and tests. See [license guide](docs/SIXLABORS-LICENSE.md) and [reviewed dependency change](docs/REVIEWED-IMAGESHARP-DEPENDENCY.md).
 - New credential saves use AES-GCM, with the key stored via Windows current-user DPAPI or Linux Secret Service. Existing TripleDES Nolvus/Mega values and plaintext Nexus keys remain readable for compatibility; they are not silently rewritten and remain at their prior risk until the user explicitly saves credentials again. Linux credential saving requires an unlocked Secret Service-compatible keyring. See [Credential storage](docs/CREDENTIALS.md).
 
 ## Downloads
 
-The current candidate is `v0.1.0-preview.2`, which supersedes the unpublished `v0.1.0-preview.1` draft. The release workflow builds and verifies Linux/Windows assets and creates an **unpublished GitHub draft pre-release**. It must not be published publicly while the ImageSharp advisory/license gate and full real-install validation remain unresolved. Check [GitHub Releases](https://github.com/ilievi187/NKNOVA-Dashboard-/releases) for release status.
+The current candidate is `v0.1.0-preview.3`, which supersedes the unpublished `v0.1.0-preview.2` and `v0.1.0-preview.1` drafts. The release workflow builds and verifies Linux/Windows assets and creates an **unpublished GitHub draft pre-release**. It must not be published publicly until full real-install acceptance, security review, and the inherited credential storage limitations have been addressed or explicitly accepted. Check [GitHub Releases](https://github.com/ilievi187/NKNOVA-Dashboard-/releases) for release status.
 
 Release assets are x64 framework-dependent packages, with SHA-256 files. Install the .NET 10 runtime before launching. If a runtime is missing, install the .NET 10 Desktop Runtime on Windows or the .NET 10 runtime package for your Linux distribution. Keep the extracted folder writable because the current application writes local settings, logs, and cache data relative to its application directory.
 
 ### Linux
 
 1. Install a current .NET 10 x64 runtime, Steam, and the external tools required by the particular Proton workflow you intend to use. Credential saving also requires a running/unlocked Secret Service-compatible user keyring (for example GNOME Keyring or a compatible KWallet service).
-2. Extract `NKNOVA-Linux-0.1.0-preview.2.tar.gz` to a user-writable directory, not `/usr` or another protected location.
+2. Extract `NKNOVA-Linux-0.1.0-preview.3.tar.gz` to a user-writable directory, not `/usr` or another protected location.
 3. Run `./Nolvus/NolvusDashboard` from the extracted package.
 4. Review diagnostics and verify the detected game path before starting any installation or repair action.
 
@@ -44,7 +44,7 @@ Do not run the application with `sudo`. Keep your existing Steam library and mod
 ### Windows
 
 1. Install a current .NET 10 x64 runtime.
-2. Extract `NKNOVA-Windows-0.1.0-preview.2.zip` to a user-writable directory.
+2. Extract `NKNOVA-Windows-0.1.0-preview.3.zip` to a user-writable directory.
 3. Run `NolvusDashboard.exe`.
 4. Confirm Skyrim Special Edition is detected correctly before using installation or repair actions.
 
@@ -80,7 +80,7 @@ See [Installation](docs/INSTALLATION.md), [Troubleshooting](docs/TROUBLESHOOTING
 
 NKNOVA source code is distributed under GPL-3.0. See [LICENSE](LICENSE) and retain upstream attribution. Nolvus, Skyrim, Steam, Proton, Nexus Mods, Avalonia, and Six Labors products are third-party names and software governed by their respective terms. No game assets are redistributed by NKNOVA.
 
-ImageSharp 3.1.12 remains in use while maintainers evaluate the existing v4.1.3 candidate. Five advisories affect this version; the Sep 15, 2026 advisory set lists 4.1.2 as patched, so v3.2.0 is not sufficient for the full set. Direct references to ImageSharp 3.2.0 and later require a valid Six Labors license at build time. No community-license application has been submitted and no key is present. An authorized maintainer must apply with the exact assemblies and store any approved key as a private GitHub Actions secret, never in tracked files. See the official [ImageSharp license/build docs](https://docs.sixlabors.com/articles/imagesharp/) and [v4.1.3 release notes](https://github.com/SixLabors/ImageSharp/releases/tag/v4.1.3).
+NKNOVA uses ImageSharp 3.2.0, which incorporates the vendor-maintained security backports for v3. The original Six Labors assembly-scoped Community license is included in this public source repository with vendor permission and applies only to the named NKNOVA assemblies. The split license remains separate from NKNOVA's GPL-3.0 source license. No personal credentials or game assets are included in our release packages.
 
 ## Credits
 

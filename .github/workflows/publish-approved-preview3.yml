@@ -1,0 +1,46 @@
+name: Publish approved NKNOVA v0.1.0-preview.3
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-approved-preview3.yml
+
+permissions:
+  contents: write
+
+jobs:
+  publish-approved-preview:
+    name: Publish verified preview.3
+    if: github.repository == 'ilievi187/NKNOVA-Dashboard-' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Verify exact prior build, draft and five assets before publishing
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          approved_sha='24925a4f6ffa4f38b66e17389ff8bafb929f4f06'
+          approved_run='40679399070'
+          release_id='426582193'
+          tag='v0.1.0-preview.3'
+          workflow=$(gh api "repos/$REPO/actions/runs/$approved_run")
+          jq -e --arg sha "$approved_sha" '.head_sha == $sha and .status == "completed" and .conclusion == "success"' <<< "$workflow" >/dev/null
+          release=$(gh api "repos/$REPO/releases/$release_id")
+          jq -e --arg sha "$approved_sha" --arg tag "$tag" '.id == 426582193 and .tag_name == $tag and .target_commitish == $sha and .prerelease == true' <<< "$release" >/dev/null
+          if jq -e '.draft == false' <<< "$release" >/dev/null; then
+            echo 'Approved release is already public; no changes necessary.'
+            exit 0
+          fi
+          jq -e '.draft == true' <<< "$release" >/dev/null
+          jq -e '([.assets[].name] | sort) == (["NKNOVA-Linux-0.1.0-preview.3.tar.gz", "NKNOVA-Linux-0.1.0-preview.3.tar.gz.sha256", "NKNOVA-Windows-0.1.0-preview.3.zip", "NKNOVA-Windows-0.1.0-preview.3.zip.sha256", "SHA256SUMS.txt"] | sort)' <<< "$release" >/dev/null
+          jq -e '(.assets | length) == 5 and all(.assets[]; .state == "uploaded" and .size > 0)' <<< "$release" >/dev/null
+          jq -e 'any(.assets[]; .name == "NKNOVA-Linux-0.1.0-preview.3.tar.gz" and .size > 100000000) and any(.assets[]; .name == "NKNOVA-Windows-0.1.0-preview.3.zip" and .size > 100000000)' <<< "$release" >/dev/null
+          echo 'Prior Linux/Windows smoke tests, security checks and SHA256 validation passed in approved workflow; exact release matches.'
+          gh api --method PATCH "repos/$REPO/releases/$release_id" -F draft=false -F prerelease=true --jq '{tag_name, draft, prerelease, html_url, assets: [.assets[].name]}'
+          verified=$(gh api "repos/$REPO/releases/$release_id")
+          jq -e --arg tag "$tag" '.tag_name == $tag and .draft == false and .prerelease == true and (.assets | length) == 5' <<< "$verified" >/dev/null
+          echo "Verified NKNOVA $tag is publicly available as a PRE-RELEASE (not stable)."

@@ -11,7 +11,6 @@ using Nolvus.Core.Utils;
 using Nolvus.Core.Enums;
 using Nolvus.StockGame.Core;
 using Nolvus.StockGame.Meta;
-using Nolvus.Core.Utils;
 
 namespace Nolvus.StockGame.Patcher
 {
@@ -151,7 +150,7 @@ namespace Nolvus.StockGame.Patcher
                 catch(Exception ex)
                 {
                     ServiceSingleton.Logger.Log(string.Format("Error during patch file download with message {0}", ex.Message));
-                    throw ex;
+                    throw;
                 }              
             });
 
@@ -347,7 +346,7 @@ namespace Nolvus.StockGame.Patcher
                 }
                 catch(Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
 

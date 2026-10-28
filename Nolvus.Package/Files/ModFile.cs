@@ -13,7 +13,6 @@ using Nolvus.Package.Mods;
 using Nolvus.Package.Utilities;
 using Nolvus.Core.Enums;
 using Avalonia.Controls;
-using Nolvus.Core.Utils;
 
 namespace Nolvus.Package.Files
 {

@@ -12,7 +12,8 @@
 - New credential saves require `secret-tool` (`libsecret-tools`) and a running, unlocked Secret Service-compatible user keyring such as GNOME Keyring or compatible KWallet.
 - Unlock the keyring in the same desktop user session that runs NKNOVA, then retry. Do not run NKNOVA with `sudo`; root uses a different Secret Service/keyring.
 - NKNOVA fails closed if the keyring is missing, locked, timed out, or cannot be reached. It does not store a new key in a plaintext fallback file, and the account save reports an error without replacing the previous `NolvusDashboard.ini`.
-- Do not delete `credentials.key`, Secret Service items, or edit `nknova:v2:`/`nknova:v3:` values manually. See [Credential storage](CREDENTIALS.md) for legacy compatibility and backup/recovery limitations.
+- If the screen reports that a fixed-key legacy password needs re-entry, type the password again and save it to the user vault; NKNOVA intentionally does not decrypt that obsolete format.
+- Do not delete `credentials.key`, Secret Service items, or edit `nknova:v2:`, `nknova:v3:`, or `nknova:ref:v4:` values manually. See [Credential storage](CREDENTIALS.md) for legacy compatibility and backup/recovery limits.
 
 ## Skyrim is not detected
 

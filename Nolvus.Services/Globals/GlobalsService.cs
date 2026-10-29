@@ -52,9 +52,9 @@ namespace Nolvus.Services.Globals
             get
             {
                 var pass = ServiceSingleton.Settings.GetIniValue(MegaSection, MegaPswd);
-                return pass == null ? string.Empty : ServiceSingleton.Lib.DecryptString(pass);
+                return pass == null ? string.Empty : ServiceSingleton.Lib.RetrieveCredential(pass);
             }
-            set => ServiceSingleton.Settings.StoreIniValue(MegaSection, MegaPswd, ServiceSingleton.Lib.EncryptString(value));
+            set => ServiceSingleton.Settings.StoreIniValue(MegaSection, MegaPswd, ServiceSingleton.Lib.StoreCredential(value));
         }
 
         public string NexusApiKey
@@ -65,8 +65,8 @@ namespace Nolvus.Services.Globals
                 if (string.IsNullOrEmpty(storedValue))
                     return string.Empty;
 
-                return UserCredentialProtector.IsProtectedValue(storedValue)
-                    ? ServiceSingleton.Lib.DecryptString(storedValue)
+                return PlatformCredentialStore.IsReference(storedValue) || UserCredentialProtector.IsProtectedValue(storedValue)
+                    ? ServiceSingleton.Lib.RetrieveCredential(storedValue)
                     : storedValue;
             }
         }

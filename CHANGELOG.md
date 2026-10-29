@@ -4,17 +4,16 @@
 
 ### Included
 
-- Protect newly saved account credentials with AES-GCM. Windows stores the key using current-user DPAPI; Linux stores it through the user's freedesktop Secret Service, with no plaintext-file fallback.
-- Preserve read-only compatibility for legacy TripleDES Nolvus/Mega values, plaintext Nexus keys, and the prior v2 AES-GCM file-key envelope. Reads do not silently rewrite credentials.
+- Store new account credentials in Windows Credential Manager protected with current-user DPAPI or in Linux Secret Service; write only random v4 vault references into the INI.
+- Preserve read-only compatibility for old v2/v3 AES-GCM envelopes and legacy plaintext Nexus keys. Reject fixed-key TripleDES Nolvus/Mega values and direct users to re-enter them.
 - Make main-settings INI updates atomic and owner-only on Unix. Credential save/keyring work runs off the Avalonia UI thread and fails closed with an actionable error.
 - Add regression coverage for credential round trips, persistence, tampering, missing/invalid keys, legacy reads, settings integration, symlink rejection, Linux keyring behavior, and test-only isolation.
 - Run Linux Secret Service integration tests in an isolated D-Bus/GNOME Keyring session in CI.
 
 ### Remaining release blockers
 
-- Existing legacy credentials remain in their original format until users explicitly re-enter and save them. As of 2026-10-26, PR #29 commit `ac73a1c` passed NKNOVA CI, ExecutableResolver CI, Security Gates, and Preview Release Validation, including Windows/Linux packaging and startup smoke jobs. Four synthetic regressions now reject malformed or oversized legacy ciphertext. This does not establish real-user credential migration, a full GUI test, or an end-to-end Nolvus installation.
-- On 2026-10-26, at PR #29 commit `ac73a1c`, the GitHub Advanced Security aggregate `CodeQL` check remains **failure**, despite successful `CodeQL (csharp)`, `CodeQL (actions)`, and `CodeQL (rust)` jobs. The unresolved TripleDES-ECB finding in `Nolvus.Services/Lib/LibService.cs` is not remediated by input validation. A successful analysis job must never be used to dismiss the security finding.
-- Draft PR #30 proposes a fail-closed auto-merge gate for the aggregate `CodeQL` result and verifies the reporting GitHub App. It requires manual review, passing checks, and safe merge before this protection is active on `main`.
+- Existing legacy credentials are not decrypted; they remain in their original format until users explicitly re-enter and save them. Newly saved credentials use authenticated AES-GCM with Windows user-scoped DPAPI or Linux Secret Service key storage. Windows DPAPI still requires GitHub Windows CI verification.
+- The legacy TripleDES-ECB decrypt path in `Nolvus.Services/Lib/LibService.cs` is removed as part of this credential reconciliation; the four `CodeQL` findings (`cs/weak-encryption`, `cs/ecb-encryption`) are remediated by removing the flagged code. Server-side CodeQL re-run on the PR head must confirm the alerts clear before merge. This does not establish real-user credential migration, a full GUI test, or an end-to-end Nolvus installation.
 - No complete live Nolvus installation has been performed.
 
 ## 0.1.0-preview.3 (unpublished security preview draft)

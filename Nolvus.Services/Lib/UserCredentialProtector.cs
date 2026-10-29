@@ -4,13 +4,12 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading;
 
 namespace Nolvus.Services.Lib
 {
     /// <summary>
-    /// Protects newly saved account credentials with a random per-user AES-GCM key.
-    /// Existing legacy values are handled by LibService and are never rewritten here.
+    /// Read-only decoder for the previous v2/v3 AES-GCM formats. New credentials are stored
+    /// as opaque Windows Credential Manager or Linux Secret Service references by PlatformCredentialStore.
     /// </summary>
     internal sealed class UserCredentialProtector
     {
@@ -26,13 +25,11 @@ namespace Nolvus.Services.Lib
 
         private static readonly byte[] LegacyAssociatedData = Encoding.UTF8.GetBytes("NKNOVA user credential envelope v2");
         private static readonly byte[] AssociatedData = Encoding.UTF8.GetBytes("NKNOVA user credential envelope v3");
-        private static readonly object KeyFileLock = new();
 
         private readonly string _directory;
         private readonly string _keyPath;
         private readonly bool _useFileKeyStore;
         private readonly LinuxSecretServiceKeyStore? _linuxSecretServiceKeyStore;
-        private readonly Lazy<byte[]> _encryptionKey;
 
         public UserCredentialProtector(string? storageDirectory = null, string? secretServiceScope = null)
         {
@@ -49,42 +46,11 @@ namespace Nolvus.Services.Lib
 
             if (OperatingSystem.IsLinux() && !_useFileKeyStore)
                 _linuxSecretServiceKeyStore = new LinuxSecretServiceKeyStore(secretServiceScope ?? "default");
-
-            _encryptionKey = new Lazy<byte[]>(LoadOrCreateCurrentKey, LazyThreadSafetyMode.ExecutionAndPublication);
         }
 
         public static bool IsProtectedValue(string? value) =>
             value?.StartsWith(ValuePrefix, StringComparison.Ordinal) == true ||
             value?.StartsWith(LegacyValuePrefix, StringComparison.Ordinal) == true;
-
-        public string Protect(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return string.Empty;
-
-            byte[] plaintext = Encoding.UTF8.GetBytes(value);
-            byte[] nonce = RandomNumberGenerator.GetBytes(NonceSize);
-            byte[] ciphertext = new byte[plaintext.Length];
-            byte[] tag = new byte[TagSize];
-            try
-            {
-                using var aes = new AesGcm(_encryptionKey.Value, TagSize);
-                aes.Encrypt(nonce, plaintext, ciphertext, tag, AssociatedData);
-
-                byte[] envelope = new byte[NonceSize + TagSize + ciphertext.Length];
-                Buffer.BlockCopy(nonce, 0, envelope, 0, NonceSize);
-                Buffer.BlockCopy(tag, 0, envelope, NonceSize, TagSize);
-                Buffer.BlockCopy(ciphertext, 0, envelope, NonceSize + TagSize, ciphertext.Length);
-                return ValuePrefix + Convert.ToBase64String(envelope);
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(plaintext);
-                CryptographicOperations.ZeroMemory(ciphertext);
-                CryptographicOperations.ZeroMemory(tag);
-                CryptographicOperations.ZeroMemory(nonce);
-            }
-        }
 
         public string Unprotect(string value)
         {
@@ -135,95 +101,12 @@ namespace Nolvus.Services.Lib
             }
         }
 
-        private byte[] LoadOrCreateCurrentKey()
-        {
-            if (OperatingSystem.IsLinux() && !_useFileKeyStore)
-                return _linuxSecretServiceKeyStore!.GetOrCreateKey();
-
-            return LoadOrCreateKey();
-        }
-
         private byte[] ReadExistingCurrentKey()
         {
             if (OperatingSystem.IsLinux() && !_useFileKeyStore)
                 return _linuxSecretServiceKeyStore!.ReadKey();
 
             return ReadExistingKey();
-        }
-
-        private byte[] LoadOrCreateKey()
-        {
-            lock (KeyFileLock)
-            {
-                RejectLink(_directory, isDirectory: true);
-                Directory.CreateDirectory(_directory);
-                RejectLink(_directory, isDirectory: true);
-                RestrictDirectoryPermissions(_directory);
-
-                RejectLink(_keyPath, isDirectory: false);
-                if (File.Exists(_keyPath))
-                    return ReadExistingKey();
-
-                byte[] key = RandomNumberGenerator.GetBytes(KeySize);
-                string temporaryKeyPath = Path.Combine(
-                    _directory,
-                    $".{KeyFileName}.{Guid.NewGuid():N}.tmp");
-                try
-                {
-                    byte[] persistedKey = ProtectKeyForStorage(key);
-                    try
-                    {
-                        using var stream = new FileStream(
-                            temporaryKeyPath,
-                            FileMode.CreateNew,
-                            FileAccess.Write,
-                            FileShare.None,
-                            4096,
-                            FileOptions.WriteThrough
-                        );
-                        RestrictFilePermissions(temporaryKeyPath);
-                        stream.Write(persistedKey, 0, persistedKey.Length);
-                        stream.Flush(flushToDisk: true);
-                    }
-                    finally
-                    {
-                        CryptographicOperations.ZeroMemory(persistedKey);
-                    }
-
-                    try
-                    {
-                        File.Move(temporaryKeyPath, _keyPath);
-                    }
-                    catch (IOException) when (File.Exists(_keyPath))
-                    {
-                        CryptographicOperations.ZeroMemory(key);
-                        return ReadExistingKey();
-                    }
-
-                    RestrictFilePermissions(_keyPath);
-                    return key;
-                }
-                catch
-                {
-                    CryptographicOperations.ZeroMemory(key);
-                    throw;
-                }
-                finally
-                {
-                    try
-                    {
-                        File.Delete(temporaryKeyPath);
-                    }
-                    catch (IOException)
-                    {
-                        // The atomically moved key is already durable; an orphaned temp is user-only protected.
-                    }
-                    catch (UnauthorizedAccessException)
-                    {
-                        // Do not mask the original key creation result with cleanup failure.
-                    }
-                }
-            }
         }
 
         private byte[] ReadExistingKey()
@@ -309,9 +192,6 @@ namespace Nolvus.Services.Lib
                 // A missing parent is expected while preparing a first-use key path.
             }
         }
-
-        private static byte[] ProtectKeyForStorage(byte[] key) =>
-            OperatingSystem.IsWindows() ? TransformWithDpapi(key, protect: true) : (byte[])key.Clone();
 
         private static byte[] UnprotectKeyForCurrentUser(byte[] persistedKey) =>
             OperatingSystem.IsWindows() ? TransformWithDpapi(persistedKey, protect: false) : (byte[])persistedKey.Clone();

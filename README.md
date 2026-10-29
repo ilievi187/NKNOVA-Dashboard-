@@ -24,7 +24,7 @@ NKNOVA is a GPL-3.0-licensed community fork of the Avalonia-based Nolvus Dashboa
 - No new, standalone Rust installer or custom one-click installation backend is included.
 - RAM/CPU/download resource-limit controls and interruption recovery are not claimed unless the current UI/backend explicitly enforces them.
 - ImageSharp 3.2.0 is now used under the vendor-issued assembly-scoped Community license (`sixlabors.lic`), with successful Windows/Linux builds and tests. See [license guide](docs/SIXLABORS-LICENSE.md) and [reviewed dependency change](docs/REVIEWED-IMAGESHARP-DEPENDENCY.md).
-- New credential saves use AES-GCM, with the key stored via Windows current-user DPAPI or Linux Secret Service. Existing TripleDES Nolvus/Mega values and plaintext Nexus keys remain readable for compatibility; they are not silently rewritten and remain at their prior risk until the user explicitly saves credentials again. Linux credential saving requires an unlocked Secret Service-compatible keyring. See [Credential storage](docs/CREDENTIALS.md).
+- New credential saves use opaque references to Windows Credential Manager entries protected with current-user DPAPI or Linux Secret Service items. Existing v2/v3 AES envelopes remain read-only compatible; legacy fixed-key TripleDES Nolvus/Mega passwords are rejected and require re-entry. Legacy plaintext Nexus keys remain readable until explicitly re-saved. See [Credential storage](docs/CREDENTIALS.md).
 
 ## Downloads
 

@@ -32,8 +32,23 @@ namespace Nolvus.Dashboard.Frames.Settings
 
             LblCheck.IsVisible = false;
 
+            if (string.IsNullOrWhiteSpace(SettingsCache.NolvusUser))
+            {
+                try { SettingsCache.NolvusUser = ServiceSingleton.Globals.NolvusUserName; }
+                catch { SettingsCache.NolvusUser = string.Empty; }
+            }
+
+            if (string.IsNullOrWhiteSpace(SettingsCache.GameDirectory))
+            {
+                try { SettingsCache.GameDirectory = ServiceSingleton.Settings.GetIniValue("Path", "GamePath") ?? string.Empty; }
+                catch { SettingsCache.GameDirectory = string.Empty; }
+            }
+
             TxtBxUserName.Text = SettingsCache.NolvusUser;
             TxtBxPassword.Text = SettingsCache.NolvusPassword;
+
+            if (SettingsCache.NolvusCredentialReentryRequired)
+                SetCheck(SettingsCache.NolvusCredentialReentryMessage, true);
         }
 
         private void SetCheck(string value, bool error)
@@ -91,6 +106,8 @@ namespace Nolvus.Dashboard.Frames.Settings
                 SettingsCache.NolvusUser = TxtBxUserName.Text;
                 SettingsCache.NolvusPassword = TxtBxPassword.Text;
 
+                string? nexusReference = null;
+                string? nolvusReference = null;
                 try
                 {
                     string settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NolvusDashboard.ini");
@@ -100,17 +117,38 @@ namespace Nolvus.Dashboard.Frames.Settings
                     string nolvusPassword = SettingsCache.NolvusPassword;
 
                     await Task.Run(() =>
-                        Nolvus.Services.Settings.SettingsService.WriteFreshSettingsAtomically(
+                    {
+                        string newNexusReference = ServiceSingleton.Lib.StoreCredential(nexusApiKey);
+                        nexusReference = newNexusReference;
+                        string newNolvusReference = ServiceSingleton.Lib.StoreCredential(nolvusPassword);
+                        nolvusReference = newNolvusReference;
+
+                        Nolvus.Services.Settings.SettingsService.SaveNolvusCredentialsAtomically(
                             settingsPath,
                             gameDirectory,
-                            nexusApiKey,
+                            newNexusReference,
                             nolvusUser,
-                            nolvusPassword,
-                            Environment.ProcessorCount,
-                            ServiceSingleton.Lib));
+                            newNolvusReference,
+                            Environment.ProcessorCount);
+                    });
                 }
                 catch
                 {
+                    try
+                    {
+                        await Task.Run(() =>
+                        {
+                            if (!string.IsNullOrEmpty(nexusReference))
+                                ServiceSingleton.Lib.DeleteCredentialReference(nexusReference);
+                            if (!string.IsNullOrEmpty(nolvusReference))
+                                ServiceSingleton.Lib.DeleteCredentialReference(nolvusReference);
+                        });
+                    }
+                    catch
+                    {
+                        // Keep the original INI and never expose storage errors or credential data in logs.
+                    }
+
                     HideLoading();
                     SetCheck(
                         "Could not save credentials securely. On Linux, verify that a Secret Service-compatible keyring is installed and unlocked. Existing settings were not changed.",
@@ -118,6 +156,11 @@ namespace Nolvus.Dashboard.Frames.Settings
                     return;
                 }
 
+                SettingsCache.NexusApiKey = string.Empty;
+                SettingsCache.NolvusPassword = string.Empty;
+                SettingsCache.NolvusCredentialReentryRequired = false;
+                SettingsCache.NolvusCredentialReentryMessage = string.Empty;
+                TxtBxPassword.Text = string.Empty;
                 await ServiceSingleton.Dashboard.LoadFrameAsync<StartFrame>();
             });
         }

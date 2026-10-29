@@ -57,72 +57,142 @@ internal static class Program
         RunCredentialProtectionRegression();
         RunCredentialSettingsIntegrationRegression();
         if (OperatingSystem.IsLinux())
+        {
+            RunLinuxLegacyV3SecretServiceRegression();
             RunLinuxSecretServiceRegression();
+        }
 
         Console.WriteLine("PASS: signed and malformed download URLs are safely logged.");
         Console.WriteLine("PASS: Steam discovery validates complete secondary libraries and rejects incomplete or traversing installs.");
         Console.WriteLine("PASS: remote images enforce supported format, response-byte, and decoded-pixel limits.");
-        Console.WriteLine("PASS: user-scoped credentials encrypt, persist, authenticate, and retain legacy read compatibility.");
-        Console.WriteLine("PASS: settings preserve legacy credentials and round-trip newly protected Nexus keys.");
+        Console.WriteLine("PASS: user-scoped credential references round-trip, legacy AES envelopes remain readable, and unsafe legacy passwords require re-entry.");
+        Console.WriteLine("PASS: settings preserve legacy values until explicit re-entry and then store only opaque vault references.");
         if (OperatingSystem.IsLinux())
-            Console.WriteLine("PASS: Linux credential keys persist through the current user's Secret Service.");
+        {
+            Console.WriteLine("PASS: existing v3 AES keys remain readable from Linux Secret Service without key migration.");
+            Console.WriteLine("PASS: Linux credential values persist through the current user's Secret Service.");
+        }
         return 0;
     }
 
     private static void RunCredentialSettingsIntegrationRegression()
     {
-        const string legacyCiphertext = "AI0pbfv2QbwhDFKWDdiA0sPZIpmNfOyo+2fJQyiSKH1CiSG+akfx1g==";
-        const string legacyValue = "NKNOVA legacy migration test only";
+        const string legacyFixedCredential = "legacy-fixed-key-format-requires-reentry";
         const string legacyNexusKey = "synthetic legacy Nexus API key";
         const string newNexusKey = "synthetic replacement Nexus API key";
+        const string newNolvusPassword = "synthetic replacement Nolvus password";
         const string newMegaPassword = "synthetic replacement Mega password";
 
         var temporaryRoot = Directory.CreateTempSubdirectory("nknova-credential-settings-");
         var originalDirectory = Environment.CurrentDirectory;
+        string scope = "settings-test-" + Guid.NewGuid().ToString("N");
+        ILibService? lib = null;
+        string? nexusReference = null;
+        string? nolvusReference = null;
+        string? megaReference = null;
         try
         {
             Environment.CurrentDirectory = temporaryRoot.FullName;
             var iniPath = Path.Combine(temporaryRoot.FullName, SettingsService.IniFile);
-            var originalIni = $"[Nexus]{Environment.NewLine}ApiKey={legacyNexusKey}{Environment.NewLine}" +
-                              $"[Nolvus]{Environment.NewLine}Password={legacyCiphertext}{Environment.NewLine}" +
-                              $"[Mega]{Environment.NewLine}Password={legacyCiphertext}{Environment.NewLine}";
+            var originalIni = $"[Path]{Environment.NewLine}GamePath=synthetic existing game path{Environment.NewLine}" +
+                              $"[Nexus]{Environment.NewLine}ApiKey={legacyNexusKey}{Environment.NewLine}UserAgent=synthetic-agent{Environment.NewLine}" +
+                              $"[Nolvus]{Environment.NewLine}Version=v1{Environment.NewLine}UserName=synthetic-old-user{Environment.NewLine}Password={legacyFixedCredential}{Environment.NewLine}" +
+                              $"[Mega]{Environment.NewLine}Email=synthetic-old-email{Environment.NewLine}Password={legacyFixedCredential}{Environment.NewLine}" +
+                              $"[Process]{Environment.NewLine}Count=4{Environment.NewLine}Retry=7{Environment.NewLine}" +
+                              $"[Custom]{Environment.NewLine}KeepValue=preserve-me{Environment.NewLine}";
             File.WriteAllText(iniPath, originalIni);
 
-            const string storageDirectory = "credential-store";
             var settings = ServiceSingleton.RegisterService<ISettingsService>(new SettingsService());
-            var lib = ServiceSingleton.RegisterService<ILibService>(new LibService(storageDirectory));
+            var credentialService = new LibService(credentialStorageDirectory: null, secretServiceScope: scope);
+            lib = ServiceSingleton.RegisterService<ILibService>(credentialService);
             var globals = new GlobalsService();
 
-            if (!string.Equals(globals.NexusApiKey, legacyNexusKey, StringComparison.Ordinal) ||
-                !string.Equals(lib.DecryptString(globals.NolvusPassword), legacyValue, StringComparison.Ordinal) ||
-                !string.Equals(globals.MegaPassword, legacyValue, StringComparison.Ordinal))
+            bool legacyNolvusRequiresReentry = false;
+            bool legacyMegaRequiresReentry = false;
+            try
             {
-                throw new Exception("FAILED: production settings services could not read legacy dummy credentials.");
+                _ = credentialService.RetrieveCredential(globals.NolvusPassword);
+            }
+            catch (LegacyCredentialReentryRequiredException)
+            {
+                legacyNolvusRequiresReentry = true;
+            }
+
+            try
+            {
+                _ = globals.MegaPassword;
+            }
+            catch (LegacyCredentialReentryRequiredException)
+            {
+                legacyMegaRequiresReentry = true;
+            }
+
+            if (!string.Equals(globals.NexusApiKey, legacyNexusKey, StringComparison.Ordinal) ||
+                !legacyNolvusRequiresReentry || !legacyMegaRequiresReentry)
+            {
+                throw new Exception("FAILED: production settings did not preserve plaintext Nexus compatibility and safely reject fixed-key legacy passwords.");
             }
 
             if (!string.Equals(File.ReadAllText(iniPath), originalIni, StringComparison.Ordinal) ||
-                Directory.Exists(storageDirectory))
+                Directory.EnumerateFiles(temporaryRoot.FullName, "*.tmp", SearchOption.AllDirectories).Any())
             {
-                throw new Exception("FAILED: reading legacy settings rewrote the INI or created credential storage.");
+                throw new Exception("FAILED: reading legacy settings rewrote the INI or left temporary files.");
             }
 
-            string protectedNexusKey = lib.EncryptString(newNexusKey);
-            settings.StoreIniValue("Nexus", "ApiKey", protectedNexusKey);
-            if (!string.Equals(globals.NexusApiKey, newNexusKey, StringComparison.Ordinal))
-                throw new Exception("FAILED: GlobalsService could not read a newly protected Nexus API key.");
+            string newNexusReference = credentialService.StoreCredential(newNexusKey);
+            string newNolvusReference = credentialService.StoreCredential(newNolvusPassword);
+            nexusReference = newNexusReference;
+            nolvusReference = newNolvusReference;
+            SettingsService.SaveNolvusCredentialsAtomically(
+                iniPath,
+                string.Empty,
+                newNexusReference,
+                "synthetic-new-user",
+                newNolvusReference,
+                2);
 
-            string protectedMegaPassword = lib.EncryptString(newMegaPassword);
+            if (!string.Equals(globals.NexusApiKey, newNexusKey, StringComparison.Ordinal))
+                throw new Exception("FAILED: GlobalsService could not retrieve the Nexus API key from the user vault.");
+            if (!string.Equals(credentialService.RetrieveCredential(globals.NolvusPassword), newNolvusPassword, StringComparison.Ordinal))
+                throw new Exception("FAILED: LibService could not retrieve the Nolvus password from the user vault.");
+
+            string newMegaReference = credentialService.StoreCredential(newMegaPassword);
+            megaReference = newMegaReference;
             SettingsService.UpdateIniFileAtomically(iniPath, data =>
-                data[GlobalsService.MegaSection][GlobalsService.MegaPswd] = protectedMegaPassword);
+                data[GlobalsService.MegaSection][GlobalsService.MegaPswd] = newMegaReference);
             if (!string.Equals(globals.MegaPassword, newMegaPassword, StringComparison.Ordinal))
-                throw new Exception("FAILED: GlobalsService could not read a newly protected Mega password.");
+                throw new Exception("FAILED: GlobalsService could not retrieve the Mega password from the user vault.");
 
             string persistedIni = File.ReadAllText(iniPath);
             if (persistedIni.Contains(newNexusKey, StringComparison.Ordinal) ||
+                persistedIni.Contains(newNolvusPassword, StringComparison.Ordinal) ||
                 persistedIni.Contains(newMegaPassword, StringComparison.Ordinal) ||
-                persistedIni.Split("nknova:v3:", StringSplitOptions.None).Length < 3)
+                persistedIni.Split("nknova:ref:v4:", StringSplitOptions.None).Length < 4)
             {
-                throw new Exception("FAILED: newly saved Nexus or Mega credentials were not stored as protected envelopes.");
+                throw new Exception("FAILED: saved credentials were not stored as opaque vault references.");
+            }
+
+            if (!string.Equals(settings.GetIniValue("Path", "GamePath"), "synthetic existing game path", StringComparison.Ordinal) ||
+                !string.Equals(settings.GetIniValue("Process", "Count"), "4", StringComparison.Ordinal) ||
+                !string.Equals(settings.GetIniValue("Process", "Retry"), "7", StringComparison.Ordinal) ||
+                !string.Equals(settings.GetIniValue("Custom", "KeepValue"), "preserve-me", StringComparison.Ordinal))
+            {
+                throw new Exception("FAILED: credential re-entry did not preserve unrelated settings.");
+            }
+
+            var newInstallIni = Path.Combine(temporaryRoot.FullName, "first-install.ini");
+            SettingsService.SaveNolvusCredentialsAtomically(
+                newInstallIni,
+                "synthetic new install game path",
+                newNexusReference,
+                "synthetic-first-install-user",
+                newNolvusReference,
+                2);
+            if (!string.Equals(settings.GetIniValue(newInstallIni, "Path", "GamePath"), "synthetic new install game path", StringComparison.Ordinal) ||
+                !string.Equals(settings.GetIniValue(newInstallIni, "Nexus", "ApiKey"), newNexusReference, StringComparison.Ordinal) ||
+                !string.Equals(settings.GetIniValue(newInstallIni, "Process", "Retry"), "3", StringComparison.Ordinal))
+            {
+                throw new Exception("FAILED: first-run credential save did not create required settings defaults.");
             }
 
             if (!OperatingSystem.IsWindows() &&
@@ -134,17 +204,19 @@ internal static class Program
             // A first-run INI must only contain protected credential envelopes.
             var freshIni = Path.Combine(temporaryRoot.FullName, "fresh-nolvus.ini");
             const string firstRunPassword = "synthetic first-run Nolvus password";
-            SettingsService.WriteFreshSettingsAtomically(
-                freshIni, "C:/synthetic/Skyrim", newNexusKey,
-                "synthetic-user", firstRunPassword, 8, lib);
+            string freshNexusRef = credentialService.StoreCredential(newNexusKey);
+            string freshNolvusRef = credentialService.StoreCredential(firstRunPassword);
+            SettingsService.SaveNolvusCredentialsAtomically(
+                freshIni, "C:/synthetic/Skyrim", freshNexusRef,
+                "synthetic-user", freshNolvusRef, 8);
 
             string freshContents = File.ReadAllText(freshIni);
             if (freshContents.Contains(newNexusKey, StringComparison.Ordinal) ||
                 freshContents.Contains(firstRunPassword, StringComparison.Ordinal) ||
                 !string.Equals(settings.GetIniValue(freshIni, "Nolvus", "UserName"), "synthetic-user", StringComparison.Ordinal) ||
                 !string.Equals(settings.GetIniValue(freshIni, "Path", "GamePath"), "C:/synthetic/Skyrim", StringComparison.Ordinal) ||
-                !string.Equals(lib.DecryptString(settings.GetIniValue(freshIni, "Nexus", "ApiKey")), newNexusKey, StringComparison.Ordinal) ||
-                !string.Equals(lib.DecryptString(settings.GetIniValue(freshIni, "Nolvus", "Password")), firstRunPassword, StringComparison.Ordinal))
+                !string.Equals(lib.RetrieveCredential(settings.GetIniValue(freshIni, "Nexus", "ApiKey")), newNexusKey, StringComparison.Ordinal) ||
+                !string.Equals(lib.RetrieveCredential(settings.GetIniValue(freshIni, "Nolvus", "Password")), firstRunPassword, StringComparison.Ordinal))
             {
                 throw new Exception("FAILED: first-run settings leaked a secret or lost a protected credential.");
             }
@@ -159,10 +231,10 @@ internal static class Program
             var rejectedIni = Path.Combine(temporaryRoot.FullName, "rejected.ini");
             try
             {
-                SettingsService.WriteFreshSettingsAtomically(
-                    rejectedIni, "C:/synthetic/Skyrim", newNexusKey,
+                SettingsService.SaveNolvusCredentialsAtomically(
+                    rejectedIni, "C:/synthetic/Skyrim", freshNexusRef,
                     "synthetic-user" + Environment.NewLine + "[UnexpectedSection]",
-                    firstRunPassword, 8, lib);
+                    freshNolvusRef, 8);
             }
             catch (ArgumentException)
             {
@@ -179,7 +251,7 @@ internal static class Program
             {
                 SettingsService.WriteTextAtomically(directoryDestination, "synthetic data");
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 invalidDestinationRejected = true;
             }
@@ -230,6 +302,20 @@ internal static class Program
         }
         finally
         {
+            try
+            {
+                if (lib is not null && !string.IsNullOrEmpty(nexusReference))
+                    lib.DeleteCredentialReference(nexusReference);
+                if (lib is not null && !string.IsNullOrEmpty(nolvusReference))
+                    lib.DeleteCredentialReference(nolvusReference);
+                if (lib is not null && !string.IsNullOrEmpty(megaReference))
+                    lib.DeleteCredentialReference(megaReference);
+            }
+            catch
+            {
+                // Cleanup is limited to the synthetic references created in this test scope.
+            }
+
             Environment.CurrentDirectory = originalDirectory;
             temporaryRoot.Delete(recursive: true);
         }
@@ -238,44 +324,44 @@ internal static class Program
     private static void RunCredentialProtectionRegression()
     {
         const string testCredential = "synthetic NKNOVA credential regression value";
-        const string legacyCiphertext = "AI0pbfv2QbwhDFKWDdiA0sPZIpmNfOyo+2fJQyiSKH1CiSG+akfx1g==";
-        const string expectedLegacyValue = "NKNOVA legacy migration test only";
-
         var temporaryRoot = Directory.CreateTempSubdirectory("nknova-credentials-");
+        string scope = "credential-test-" + Guid.NewGuid().ToString("N");
+        var legacyStorageDirectory = Path.Combine(temporaryRoot.FullName, "legacy-file-store");
+        ILibService? service = null;
+        string? firstReference = null;
+        string? secondReference = null;
         try
         {
-            var storageDirectory = Path.Combine(temporaryRoot.FullName, "profile", "credentials");
-            var service = new LibService(storageDirectory);
+            service = new LibService(legacyStorageDirectory, scope);
 
-            if (!string.IsNullOrEmpty(service.EncryptString(string.Empty)) || Directory.Exists(storageDirectory))
-                throw new Exception("FAILED: encrypting an empty credential created storage or returned data.");
+            if (!string.IsNullOrEmpty(service.StoreCredential(string.Empty)) || Directory.Exists(legacyStorageDirectory))
+                throw new Exception("FAILED: storing an empty credential created a vault item or file store.");
 
-            var protectedValue = service.EncryptString(testCredential);
-            if (!protectedValue.StartsWith("nknova:v3:", StringComparison.Ordinal) ||
-                protectedValue.Contains(testCredential, StringComparison.Ordinal))
+            firstReference = service.StoreCredential(testCredential);
+            if (!firstReference.StartsWith("nknova:ref:v4:", StringComparison.Ordinal) ||
+                firstReference.Contains(testCredential, StringComparison.Ordinal) ||
+                Directory.Exists(legacyStorageDirectory))
             {
-                throw new Exception("FAILED: a newly saved credential was not protected in the expected envelope.");
+                throw new Exception("FAILED: a new credential was not represented by an opaque OS-vault reference.");
             }
 
-            if (!string.Equals(service.DecryptString(protectedValue), testCredential, StringComparison.Ordinal))
-                throw new Exception("FAILED: protected credential did not round-trip through LibService.");
+            if (!string.Equals(service.RetrieveCredential(firstReference), testCredential, StringComparison.Ordinal))
+                throw new Exception("FAILED: OS-vault credential did not round-trip through LibService.");
 
-            var secondProtectedValue = service.EncryptString(testCredential);
-            if (string.Equals(protectedValue, secondProtectedValue, StringComparison.Ordinal))
-                throw new Exception("FAILED: repeated credential encryption reused the same nonce/envelope.");
+            secondReference = service.StoreCredential(testCredential);
+            if (string.Equals(firstReference, secondReference, StringComparison.Ordinal))
+                throw new Exception("FAILED: repeated credential saves reused the same opaque reference.");
 
-            var reopenedService = new LibService(storageDirectory);
-            if (!string.Equals(reopenedService.DecryptString(protectedValue), testCredential, StringComparison.Ordinal))
-                throw new Exception("FAILED: a new LibService instance could not read the persisted credential key.");
+            var reopenedService = new LibService(legacyStorageDirectory, scope);
+            if (!string.Equals(reopenedService.RetrieveCredential(firstReference), testCredential, StringComparison.Ordinal))
+                throw new Exception("FAILED: a new LibService instance could not retrieve the persisted OS-vault value.");
 
-            var tamperedBytes = Convert.FromBase64String(protectedValue["nknova:v3:".Length..]);
-            tamperedBytes[12] ^= 0x01;
-            var tamperedValue = "nknova:v3:" + Convert.ToBase64String(tamperedBytes);
-            CryptographicOperations.ZeroMemory(tamperedBytes);
+            char replacement = firstReference[^1] == '0' ? '1' : '0';
+            var tamperedReference = firstReference[..^1] + replacement;
             var tamperingRejected = false;
             try
             {
-                _ = reopenedService.DecryptString(tamperedValue);
+                _ = reopenedService.RetrieveCredential(tamperedReference);
             }
             catch (CryptographicException)
             {
@@ -283,12 +369,12 @@ internal static class Program
             }
 
             if (!tamperingRejected)
-                throw new Exception("FAILED: modified credential envelope was accepted.");
+                throw new Exception("FAILED: modified opaque credential reference was accepted.");
 
             var malformedEnvelopeRejected = false;
             try
             {
-                _ = reopenedService.DecryptString("nknova:v3:not-base64!");
+                _ = reopenedService.RetrieveCredential("nknova:ref:v4:" + scope + ":not-a-guid");
             }
             catch (CryptographicException)
             {
@@ -296,136 +382,78 @@ internal static class Program
             }
 
             if (!malformedEnvelopeRejected)
-                throw new Exception("FAILED: malformed protected credential text was accepted.");
+                throw new Exception("FAILED: malformed credential reference was accepted.");
 
-            RunLegacyV2EnvelopeRegression(temporaryRoot.FullName);
-
-            var missingKeyDirectory = Path.Combine(temporaryRoot.FullName, "missing-key", "credentials");
-            var missingKeyRejected = false;
+            var missingReference = "nknova:ref:v4:" + scope + ":" + Guid.NewGuid().ToString("N");
+            var missingReferenceRejected = false;
             try
             {
-                _ = new LibService(missingKeyDirectory).DecryptString(protectedValue);
-            }
-            catch (CryptographicException ex) when (ex.Message.Contains("key is missing", StringComparison.OrdinalIgnoreCase))
-            {
-                missingKeyRejected = true;
-            }
-
-            if (!missingKeyRejected || Directory.Exists(missingKeyDirectory))
-                throw new Exception("FAILED: a missing protected-credential key was not rejected without creating storage.");
-
-            var invalidKeyDirectory = Path.Combine(temporaryRoot.FullName, "invalid-key");
-            Directory.CreateDirectory(invalidKeyDirectory);
-            File.WriteAllBytes(Path.Combine(invalidKeyDirectory, "credentials.key"), new byte[65 * 1024]);
-            var invalidKeyRejected = false;
-            try
-            {
-                _ = new LibService(invalidKeyDirectory).DecryptString(protectedValue);
+                _ = reopenedService.RetrieveCredential(missingReference);
             }
             catch (CryptographicException)
             {
-                invalidKeyRejected = true;
+                missingReferenceRejected = true;
             }
 
-            if (!invalidKeyRejected)
-                throw new Exception("FAILED: invalid persisted key size was accepted.");
+            if (!missingReferenceRejected)
+                throw new Exception("FAILED: missing OS-vault credential reference did not fail closed.");
 
-            if (OperatingSystem.IsLinux())
+            var missingLegacyDirectory = Path.Combine(temporaryRoot.FullName, "missing-legacy-aes-key");
+            var missingLegacyEnvelope = "nknova:v2:" + Convert.ToBase64String(new byte[28]);
+            var missingLegacyKeyRejected = false;
+            try
             {
-                var absentSecretServiceScope = "missing-" + Guid.NewGuid().ToString("N");
-                var absentSecretServiceKeyRejected = false;
-                try
-                {
-                    _ = new LibService(credentialStorageDirectory: null, secretServiceScope: absentSecretServiceScope)
-                        .DecryptString(protectedValue);
-                }
-                catch (CryptographicException ex) when (ex.Message.Contains("key is missing", StringComparison.OrdinalIgnoreCase))
-                {
-                    absentSecretServiceKeyRejected = true;
-                }
-
-                if (!absentSecretServiceKeyRejected)
-                    throw new Exception("FAILED: missing Linux Secret Service key did not fail closed.");
+                _ = new LibService(missingLegacyDirectory, scope).RetrieveCredential(missingLegacyEnvelope);
+            }
+            catch (CryptographicException ex) when (ex.Message.Contains("key is missing", StringComparison.OrdinalIgnoreCase))
+            {
+                missingLegacyKeyRejected = true;
             }
 
-            var legacyDirectory = Path.Combine(temporaryRoot.FullName, "legacy-read-only", "credentials");
-            var legacyService = new LibService(legacyDirectory);
-            if (!string.Equals(legacyService.DecryptString(legacyCiphertext), expectedLegacyValue, StringComparison.Ordinal))
-                throw new Exception("FAILED: legacy credential value could not be read.");
+            if (!missingLegacyKeyRejected || Directory.Exists(missingLegacyDirectory))
+                throw new Exception("FAILED: missing legacy AES key was not rejected without creating storage.");
 
-            if (Directory.Exists(legacyDirectory))
-                throw new Exception("FAILED: reading a legacy credential silently created or migrated credential storage.");
-
-            // Legacy read compatibility must reject malformed or oversized inputs without
-            // writing a key or touching the existing settings file.
-            string[] invalidLegacyValues =
+            var legacyValueRejected = false;
+            try
             {
-                "bad",
-                "%%%%",
-                Convert.ToBase64String(new byte[7]),
-                new string('A', 24 * 1024 + 4)
-            };
-            foreach (string invalidLegacyValue in invalidLegacyValues)
+                _ = reopenedService.RetrieveCredential("legacy-fixed-key-format-requires-reentry");
+            }
+            catch (LegacyCredentialReentryRequiredException)
             {
-                bool rejected = false;
-                try
-                {
-                    _ = legacyService.DecryptString(invalidLegacyValue);
-                }
-                catch (CryptographicException)
-                {
-                    rejected = true;
-                }
-
-                if (!rejected)
-                    throw new Exception("FAILED: malformed or oversized legacy credential was accepted.");
-                if (Directory.Exists(legacyDirectory))
-                    throw new Exception("FAILED: invalid legacy credential created key storage.");
+                legacyValueRejected = true;
             }
 
-            if (!OperatingSystem.IsWindows())
-            {
-                const UnixFileMode groupOrOther = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
-                                                   UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
-                var directoryMode = File.GetUnixFileMode(storageDirectory);
-                var keyMode = File.GetUnixFileMode(Path.Combine(storageDirectory, "credentials.key"));
-                if ((directoryMode & groupOrOther) != 0 || (keyMode & groupOrOther) != 0)
-                    throw new Exception("FAILED: credential directory or key permissions are not restricted to the current user.");
+            if (!legacyValueRejected)
+                throw new Exception("FAILED: insecure fixed-key legacy credential was not rejected for re-entry.");
 
-                var linkedDirectoryTarget = Path.Combine(temporaryRoot.FullName, "linked-target");
-                var linkedDirectory = Path.Combine(temporaryRoot.FullName, "linked-credentials");
-                Directory.CreateDirectory(linkedDirectoryTarget);
-                Directory.CreateSymbolicLink(linkedDirectory, linkedDirectoryTarget);
-                var linkedDirectoryRejected = false;
-                try
-                {
-                    _ = new LibService(linkedDirectory).EncryptString(testCredential);
-                }
-                catch (CryptographicException)
-                {
-                    linkedDirectoryRejected = true;
-                }
+            RunLegacyAesEnvelopeRegression(temporaryRoot.FullName, scope, version: 2);
+            RunLegacyAesEnvelopeRegression(temporaryRoot.FullName, scope, version: 3);
+            RunInvalidLegacyKeySizeRegression(temporaryRoot.FullName, scope);
+            RunLegacyCredentialSymlinkRegression(temporaryRoot.FullName, scope);
 
-                if (!linkedDirectoryRejected || Directory.EnumerateFileSystemEntries(linkedDirectoryTarget).Any())
-                    throw new Exception("FAILED: credential storage accepted a linked directory or wrote through it.");
-            }
-            else
-            {
-                var persistedKey = File.ReadAllBytes(Path.Combine(storageDirectory, "credentials.key"));
-                if (persistedKey.Length == 32)
-                    throw new Exception("FAILED: Windows credential key was stored without per-user DPAPI protection.");
-                CryptographicOperations.ZeroMemory(persistedKey);
-            }
+            if (Directory.Exists(legacyStorageDirectory))
+                throw new Exception("FAILED: new v4 credentials were written outside the OS vault.");
         }
         finally
         {
+            try
+            {
+                if (service is not null && !string.IsNullOrEmpty(firstReference))
+                    service.DeleteCredentialReference(firstReference);
+                if (service is not null && !string.IsNullOrEmpty(secondReference))
+                    service.DeleteCredentialReference(secondReference);
+            }
+            catch
+            {
+                // Cleanup is limited to the synthetic references created in this test scope.
+            }
             temporaryRoot.Delete(recursive: true);
         }
     }
 
-    private static void RunLegacyV2EnvelopeRegression(string temporaryRoot)
+    private static void RunLegacyAesEnvelopeRegression(string temporaryRoot, string credentialScope, int version)
     {
-        var legacyDirectory = Path.Combine(temporaryRoot, "legacy-v2-key");
+        var legacyDirectory = Path.Combine(temporaryRoot, $"legacy-v{version}-key");
         Directory.CreateDirectory(legacyDirectory);
         byte[] key = RandomNumberGenerator.GetBytes(32);
         try
@@ -434,11 +462,40 @@ internal static class Program
             if (!OperatingSystem.IsWindows())
                 File.SetUnixFileMode(Path.Combine(legacyDirectory, "credentials.key"), UnixFileMode.UserRead | UnixFileMode.UserWrite);
 
-            const string expected = "synthetic v2 credential compatibility value";
-            string legacyValue = CreateLegacyV2Envelope(key, expected);
-            string actual = new LibService(legacyDirectory).DecryptString(legacyValue);
+            string expected = $"synthetic v{version} credential compatibility value";
+            string legacyValue = CreateLegacyAesEnvelope(key, expected, version);
+            var service = new LibService(legacyDirectory, credentialScope);
+            string actual = service.RetrieveCredential(legacyValue);
             if (!string.Equals(actual, expected, StringComparison.Ordinal))
-                throw new Exception("FAILED: legacy v2 AES-GCM credential could not be read.");
+                throw new Exception($"FAILED: legacy v{version} AES-GCM credential could not be read.");
+
+            byte[] envelope = Convert.FromBase64String(legacyValue[$"nknova:v{version}:".Length..]);
+            envelope[12] ^= 0x01;
+            string tampered = $"nknova:v{version}:" + Convert.ToBase64String(envelope);
+            CryptographicOperations.ZeroMemory(envelope);
+            bool rejected = false;
+            try
+            {
+                _ = service.RetrieveCredential(tampered);
+            }
+            catch (CryptographicException)
+            {
+                rejected = true;
+            }
+
+            if (!rejected)
+                throw new Exception($"FAILED: tampered legacy v{version} envelope was accepted.");
+
+            if (!OperatingSystem.IsWindows())
+            {
+                const UnixFileMode groupOrOther = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
+                                                   UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
+                if ((File.GetUnixFileMode(legacyDirectory) & groupOrOther) != 0 ||
+                    (File.GetUnixFileMode(Path.Combine(legacyDirectory, "credentials.key")) & groupOrOther) != 0)
+                {
+                    throw new Exception("FAILED: legacy key-file read did not restrict storage to the current user.");
+                }
+            }
         }
         finally
         {
@@ -446,7 +503,126 @@ internal static class Program
         }
     }
 
-    private static string CreateLegacyV2Envelope(byte[] key, string value)
+    private static void RunInvalidLegacyKeySizeRegression(string temporaryRoot, string credentialScope)
+    {
+        var invalidKeyDirectory = Path.Combine(temporaryRoot, "invalid-legacy-key");
+        Directory.CreateDirectory(invalidKeyDirectory);
+        File.WriteAllBytes(Path.Combine(invalidKeyDirectory, "credentials.key"), new byte[65 * 1024]);
+        string envelope = "nknova:v2:" + Convert.ToBase64String(new byte[28]);
+        bool invalidKeyRejected = false;
+        try
+        {
+            _ = new LibService(invalidKeyDirectory, credentialScope).RetrieveCredential(envelope);
+        }
+        catch (CryptographicException)
+        {
+            invalidKeyRejected = true;
+        }
+
+        if (!invalidKeyRejected)
+            throw new Exception("FAILED: oversized legacy credential key file was accepted.");
+    }
+
+    private static void RunLegacyCredentialSymlinkRegression(string temporaryRoot, string credentialScope)
+    {
+        string testRoot = Path.Combine(temporaryRoot, "legacy-symlink-regression");
+        string targetDirectory = Path.Combine(testRoot, "target-directory");
+        string linkedDirectory = Path.Combine(testRoot, "linked-directory");
+        string keyDirectory = Path.Combine(testRoot, "key-directory");
+        string externalKeyPath = Path.Combine(testRoot, "external-credentials.key");
+        string linkedKeyPath = Path.Combine(keyDirectory, "credentials.key");
+        Directory.CreateDirectory(targetDirectory);
+        Directory.CreateDirectory(keyDirectory);
+
+        byte[] key = RandomNumberGenerator.GetBytes(32);
+        try
+        {
+            string expectedValue = "synthetic legacy credential symlink test";
+            string legacyEnvelope = CreateLegacyAesEnvelope(key, expectedValue, version: 2);
+            string targetKeyPath = Path.Combine(targetDirectory, "credentials.key");
+            File.WriteAllBytes(targetKeyPath, key);
+            File.WriteAllBytes(externalKeyPath, key);
+            File.WriteAllBytes(linkedKeyPath, key);
+
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(targetKeyPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                File.SetUnixFileMode(externalKeyPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                File.SetUnixFileMode(linkedKeyPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+
+            try
+            {
+                Directory.CreateSymbolicLink(linkedDirectory, targetDirectory);
+            }
+            catch (Exception exception) when (OperatingSystem.IsWindows() && IsWindowsSymlinkPrivilegeError(exception))
+            {
+                Console.WriteLine("SKIP: Windows runner does not grant symbolic-link creation privilege; Credential Manager/DPAPI regressions still run.");
+                return;
+            }
+
+            AssertLegacyKeyLinkRejected(linkedDirectory, legacyEnvelope, "linked credential directory");
+
+            File.Delete(linkedKeyPath);
+            try
+            {
+                File.CreateSymbolicLink(linkedKeyPath, externalKeyPath);
+            }
+            catch (Exception exception) when (OperatingSystem.IsWindows() && IsWindowsSymlinkPrivilegeError(exception))
+            {
+                Console.WriteLine("SKIP: Windows runner does not grant file-symlink creation privilege; legacy key-directory symlink rejection passed.");
+                return;
+            }
+
+            AssertLegacyKeyLinkRejected(keyDirectory, legacyEnvelope, "linked credentials.key file");
+
+            byte[] targetBytes = File.ReadAllBytes(targetKeyPath);
+            byte[] externalBytes = File.ReadAllBytes(externalKeyPath);
+            try
+            {
+                if (!CryptographicOperations.FixedTimeEquals(targetBytes, key) ||
+                    !CryptographicOperations.FixedTimeEquals(externalBytes, key))
+                {
+                    throw new Exception("FAILED: reading a linked legacy credential key modified its target.");
+                }
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(targetBytes);
+                CryptographicOperations.ZeroMemory(externalBytes);
+            }
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(key);
+        }
+    }
+
+    private static void AssertLegacyKeyLinkRejected(string storageDirectory, string legacyEnvelope, string description)
+    {
+        bool rejected = false;
+        try
+        {
+            _ = new LibService(storageDirectory).RetrieveCredential(legacyEnvelope);
+        }
+        catch (CryptographicException)
+        {
+            rejected = true;
+        }
+
+        if (!rejected)
+            throw new Exception($"FAILED: legacy credential storage accepted a {description}.");
+    }
+
+    private static bool IsWindowsSymlinkPrivilegeError(Exception exception)
+    {
+        const int ErrorPrivilegeNotHeld = 1314;
+        return exception is UnauthorizedAccessException ||
+               (exception is IOException or System.ComponentModel.Win32Exception) &&
+               (exception.HResult & 0xffff) == ErrorPrivilegeNotHeld;
+    }
+
+    private static string CreateLegacyAesEnvelope(byte[] key, string value, int version)
     {
         const int nonceSize = 12;
         const int tagSize = 16;
@@ -457,12 +633,12 @@ internal static class Program
         try
         {
             using var aes = new AesGcm(key, tagSize);
-            aes.Encrypt(nonce, plaintext, ciphertext, tag, Encoding.UTF8.GetBytes("NKNOVA user credential envelope v2"));
+            aes.Encrypt(nonce, plaintext, ciphertext, tag, Encoding.UTF8.GetBytes($"NKNOVA user credential envelope v{version}"));
             var envelope = new byte[nonceSize + tagSize + ciphertext.Length];
             Buffer.BlockCopy(nonce, 0, envelope, 0, nonceSize);
             Buffer.BlockCopy(tag, 0, envelope, nonceSize, tagSize);
             Buffer.BlockCopy(ciphertext, 0, envelope, nonceSize + tagSize, ciphertext.Length);
-            return "nknova:v2:" + Convert.ToBase64String(envelope);
+            return $"nknova:v{version}:" + Convert.ToBase64String(envelope);
         }
         finally
         {
@@ -476,59 +652,112 @@ internal static class Program
     private static void RunLinuxSecretServiceRegression()
     {
         string scope = "test-" + Guid.NewGuid().ToString("N");
+        ILibService? service = null;
+        string? reference = null;
         try
         {
             const string testCredential = "synthetic Linux Secret Service credential";
-            var service = new LibService(credentialStorageDirectory: null, secretServiceScope: scope);
-            string protectedValue = service.EncryptString(testCredential);
-            if (!protectedValue.StartsWith("nknova:v3:", StringComparison.Ordinal) ||
-                protectedValue.Contains(testCredential, StringComparison.Ordinal))
+            service = new LibService(credentialStorageDirectory: null, secretServiceScope: scope);
+            reference = service.StoreCredential(testCredential);
+            if (!reference.StartsWith("nknova:ref:v4:", StringComparison.Ordinal) ||
+                reference.Contains(testCredential, StringComparison.Ordinal))
             {
-                throw new Exception("FAILED: Linux Secret Service credential did not use the protected v3 envelope.");
+                throw new Exception("FAILED: Linux Secret Service credential did not use an opaque v4 reference.");
             }
 
             var reopenedService = new LibService(credentialStorageDirectory: null, secretServiceScope: scope);
-            if (!string.Equals(reopenedService.DecryptString(protectedValue), testCredential, StringComparison.Ordinal))
+            if (!string.Equals(reopenedService.RetrieveCredential(reference), testCredential, StringComparison.Ordinal))
                 throw new Exception("FAILED: Linux Secret Service credential did not persist across LibService instances.");
         }
         finally
         {
-            ClearLinuxSecretServiceTestScope(scope);
+            if (service is not null && !string.IsNullOrEmpty(reference))
+            {
+                try { service.DeleteCredentialReference(reference); }
+                catch { /* Cleanup is limited to the synthetic reference created in this test scope. */ }
+            }
         }
     }
 
-    private static void ClearLinuxSecretServiceTestScope(string scope)
+    private static void RunLinuxLegacyV3SecretServiceRegression()
+    {
+        string scope = "legacy-v3-test-" + Guid.NewGuid().ToString("N");
+        byte[] key = RandomNumberGenerator.GetBytes(32);
+        try
+        {
+            RunSecretTool(
+                "store",
+                new[]
+                {
+                    "--label", "NKNOVA legacy v3 test key",
+                    "application", "nknova",
+                    "purpose", "credential-encryption-key",
+                    "format", "3",
+                    "scope", scope
+                },
+                Encoding.ASCII.GetBytes(Convert.ToBase64String(key)));
+
+            const string expected = "synthetic previous-v3 credential";
+            string legacyV3Value = CreateLegacyAesEnvelope(key, expected, version: 3);
+            var service = new LibService(credentialStorageDirectory: null, secretServiceScope: scope);
+            if (!string.Equals(service.RetrieveCredential(legacyV3Value), expected, StringComparison.Ordinal))
+                throw new Exception("FAILED: prior v3 credential key could not be read from Linux Secret Service.");
+        }
+        finally
+        {
+            try
+            {
+                RunSecretTool(
+                    "clear",
+                    new[]
+                    {
+                        "application", "nknova",
+                        "purpose", "credential-encryption-key",
+                        "format", "3",
+                        "scope", scope
+                    },
+                    standardInput: null);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(key);
+            }
+        }
+    }
+
+    private static void RunSecretTool(string operation, string[] arguments, byte[]? standardInput)
     {
         var startInfo = new ProcessStartInfo("secret-tool")
         {
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
-            RedirectStandardError = true
+            RedirectStandardError = true,
+            RedirectStandardInput = standardInput is not null
         };
-        startInfo.ArgumentList.Add("clear");
-        startInfo.ArgumentList.Add("application");
-        startInfo.ArgumentList.Add("nknova");
-        startInfo.ArgumentList.Add("purpose");
-        startInfo.ArgumentList.Add("credential-encryption-key");
-        startInfo.ArgumentList.Add("format");
-        startInfo.ArgumentList.Add("3");
-        startInfo.ArgumentList.Add("scope");
-        startInfo.ArgumentList.Add(scope);
+        startInfo.ArgumentList.Add(operation);
+        foreach (string argument in arguments)
+            startInfo.ArgumentList.Add(argument);
 
         using var process = Process.Start(startInfo)
-            ?? throw new Exception("FAILED: could not clean up the synthetic Secret Service test item.");
+            ?? throw new Exception("FAILED: could not run the synthetic Secret Service regression helper.");
         Task<string> output = process.StandardOutput.ReadToEndAsync();
         Task<string> error = process.StandardError.ReadToEndAsync();
+        if (standardInput is not null)
+        {
+            process.StandardInput.BaseStream.Write(standardInput);
+            process.StandardInput.Close();
+        }
+
         if (!process.WaitForExit(15000))
         {
             process.Kill(entireProcessTree: true);
-            throw new Exception("FAILED: timed out cleaning up the synthetic Secret Service test item.");
+            throw new Exception("FAILED: synthetic Secret Service regression command timed out.");
         }
 
         Task.WaitAll(output, error);
         if (process.ExitCode != 0)
-            throw new Exception("FAILED: could not clean up the synthetic Secret Service test item.");
+            throw new Exception("FAILED: synthetic Secret Service regression command failed.");
     }
 
     private static void RunSteamLibraryDetectionRegression()

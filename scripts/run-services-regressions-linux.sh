@@ -28,7 +28,9 @@ dbus-run-session -- bash -euo pipefail -c '
   mkdir -p "$XDG_RUNTIME_DIR" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
   chmod 700 "$XDG_RUNTIME_DIR"
 
-  login_environment="$(printf %s nknova-ci-test-keyring-password | gnome-keyring-daemon --login --components=secrets)"
+  keyring_password="$(head -c 32 /dev/urandom | base64)"
+  login_environment="$(printf %s "$keyring_password" | gnome-keyring-daemon --login --components=secrets)"
+  unset keyring_password
   eval "$login_environment"
   start_environment="$(gnome-keyring-daemon --start --components=secrets)"
   eval "$start_environment"

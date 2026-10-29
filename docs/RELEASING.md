@@ -30,7 +30,7 @@ Before changing the draft to a public pre-release, a maintainer must verify all 
 3. No unresolved critical/high findings affect shipped behavior; any finding dismissed as unreachable must be mapped to the actual call graph and reviewed before closure.
 4. The ImageSharp advisories have been fixed with a compatible licensed package or a reachable-code mitigation has been independently reviewed and documented.
 5. A valid approved Six Labors license is available for every direct-reference assembly before building upgraded packages.
-6. Credential behavior and rollback limits are documented. New Nolvus/Mega/Nexus saves use platform-scoped protection, but legacy TripleDES Nolvus/Mega values and legacy plaintext Nexus values are only read-compatible until users explicitly save them again. Do not describe those unsaved legacy values as protected or claim automatic migration.
+6. Credential behavior and rollback limits are documented. New Nolvus/Mega/Nexus saves use platform-vault references. v2/v3 AES-GCM values remain read-only compatible, while fixed-key TripleDES Nolvus/Mega values are rejected and require user re-entry; legacy plaintext Nexus keys remain readable until explicitly re-saved. Do not describe unsupported legacy passwords as protected.
 7. A supported real Nolvus test environment has completed applicable installer acceptance tests. Do not modify an ordinary user's game installation to satisfy this gate.
 8. Release notes, known limitations, runtime requirements, and rollback instructions are accurate.
 

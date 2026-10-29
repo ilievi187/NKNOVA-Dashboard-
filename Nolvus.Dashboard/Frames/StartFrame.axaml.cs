@@ -11,12 +11,15 @@ using Vcc.Nolvus.Api.Installer.Library;
 using Vcc.Nolvus.Api.Installer.Services;
 using Nolvus.Package.Conditions;
 using Nolvus.Dashboard.Controls;
+using Nolvus.Dashboard.Core;
 using Nolvus.Dashboard.Frames.Installer;
 using Nolvus.Dashboard.Frames.Instance;
 using Nolvus.Dashboard.Frames.Settings;
+using Nolvus.Services.Lib;
 using Avalonia.Controls.ApplicationLifetimes;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 
 namespace Nolvus.Dashboard.Frames
 {
@@ -141,10 +144,12 @@ namespace Nolvus.Dashboard.Frames
                 {   
                     var window = TopLevel.GetTopLevel(this) as DashboardWindow;
                     window?.SetAccountImageVisible(true);
-                    await CheckNolvus();
+                    if (!await CheckNolvus())
+                        return;
                     // NKNOVA is a fork and has no verified update channel yet. Do not query
                     // or launch the upstream updater, which could replace this build.
-                    await CheckNexus();
+                    if (!await CheckNexus())
+                        return;
 
                     var InstancesCheck = await CheckInstances();
                     ServiceSingleton.Dashboard.EnableSettings();
@@ -174,7 +179,7 @@ namespace Nolvus.Dashboard.Frames
 
         }
 
-        private async Task CheckNolvus()
+        private async Task<bool> CheckNolvus()
         {
             try 
             {
@@ -187,7 +192,7 @@ namespace Nolvus.Dashboard.Frames
                     ApiUrl = ServiceSingleton.Globals.ApiUrl,
                     ApiVersion = ServiceSingleton.Globals.ApiVersion,
                     UserName = ServiceSingleton.Globals.NolvusUserName,
-                    Password = ServiceSingleton.Lib.DecryptString(ServiceSingleton.Globals.NolvusPassword)
+                    Password = ServiceSingleton.Lib.RetrieveCredential(ServiceSingleton.Globals.NolvusPassword)
                 });
 
                 var ApiUrl = account.ApiUrl;
@@ -197,7 +202,8 @@ namespace Nolvus.Dashboard.Frames
 
                 if (ApiVersion == string.Empty || UserName == string.Empty || Password == string.Empty)
                 {
-                    throw new Exception("Nolvus settings missing, please check your Nolvus settings!");
+                    await RouteToNolvusCredentialReentryAsync("Nolvus credentials are missing. Enter them again to save with secure user-scoped storage.");
+                    return false;
                 }
                 else
                 {
@@ -212,6 +218,20 @@ namespace Nolvus.Dashboard.Frames
 
                     ServiceSingleton.Logger.Log("Connected to Nolvus");
                 }
+
+                return true;
+            }
+            catch (LegacyCredentialReentryRequiredException)
+            {
+                await RouteToNolvusCredentialReentryAsync(
+                    "The saved Nolvus password uses an unsupported legacy format. Re-enter it to replace it with secure user-scoped storage.");
+                return false;
+            }
+            catch (CryptographicException)
+            {
+                await RouteToNolvusCredentialReentryAsync(
+                    "The saved Nolvus credential cannot be opened. Restore its user keyring or enter the password again.");
+                return false;
             }
             catch (Exception ex) 
             {
@@ -224,23 +244,68 @@ namespace Nolvus.Dashboard.Frames
                 
                 await ServiceSingleton.Dashboard.Error("Error", "Error during Nolvus connection. The Nolvus web site may be experiencing issues" + "\n" + CaughtExeption);
                 //throw new Exception("Error during Nolvus connection. The Nolvus web site may have issues currently. Original message : " + CaughtExeption + ")");
+                return true;
             }
         }
 
-        private async Task CheckNexus()
+        private async Task RouteToNolvusCredentialReentryAsync(string message)
+        {
+            var currentSettings = await Task.Run(() =>
+            {
+                string userName = string.Empty;
+                string gameDirectory = string.Empty;
+                string nexusApiKey = string.Empty;
+
+                try { userName = ServiceSingleton.Globals.NolvusUserName ?? string.Empty; }
+                catch { }
+                try { gameDirectory = ServiceSingleton.Settings.GetIniValue("Path", "GamePath") ?? string.Empty; }
+                catch { }
+                try { nexusApiKey = ServiceSingleton.Globals.NexusApiKey ?? string.Empty; }
+                catch (CryptographicException) { }
+
+                return (UserName: userName, GameDirectory: gameDirectory, NexusApiKey: nexusApiKey);
+            });
+
+            SettingsCache.NolvusUser = currentSettings.UserName;
+            SettingsCache.NolvusPassword = string.Empty;
+            SettingsCache.GameDirectory = currentSettings.GameDirectory;
+            SettingsCache.NexusApiKey = currentSettings.NexusApiKey;
+            SettingsCache.NolvusCredentialReentryRequired = true;
+            SettingsCache.NolvusCredentialReentryMessage = message;
+
+            if (string.IsNullOrWhiteSpace(currentSettings.NexusApiKey))
+                await ServiceSingleton.Dashboard.LoadFrameAsync<NexusFrame>();
+            else
+                await ServiceSingleton.Dashboard.LoadFrameAsync<NolvusFrame>();
+        }
+
+        private async Task<bool> CheckNexus()
         {
             ServiceSingleton.Dashboard.Status("Connecting to Nexus...");
 
             ServiceSingleton.Files.RemoveDirectory(ServiceSingleton.Folders.NexusCacheDirectory, false);
 
-            var nexusSettings = await Task.Run(() => (
-                ApiKey: ServiceSingleton.Globals.NexusApiKey,
-                UserAgent: ServiceSingleton.Globals.NexusUserAgent));
+            (string ApiKey, string UserAgent) nexusSettings;
+            try
+            {
+                nexusSettings = await Task.Run(() => (
+                    ApiKey: ServiceSingleton.Globals.NexusApiKey,
+                    UserAgent: ServiceSingleton.Globals.NexusUserAgent));
+            }
+            catch (CryptographicException)
+            {
+                await RouteToNexusCredentialReentryAsync();
+                return false;
+            }
+
             var key = nexusSettings.ApiKey;
             var agent = nexusSettings.UserAgent;
 
             if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(agent))
-                throw new Exception("Nexus API key or User Agent missing!");
+            {
+                await RouteToNexusCredentialReentryAsync();
+                return false;
+            }
 
             NexusApi.ApiManager.Init(key, agent, ServiceSingleton.Folders.NexusCacheDirectory);
 
@@ -255,6 +320,44 @@ namespace Nolvus.Dashboard.Frames
                 ServiceSingleton.Dashboard.AccountType("(Default)");
 
             ServiceSingleton.Dashboard.Progress(75);
+            return true;
+        }
+
+        private async Task RouteToNexusCredentialReentryAsync()
+        {
+            var currentSettings = await Task.Run(() =>
+            {
+                string userName = string.Empty;
+                string gameDirectory = string.Empty;
+                string nolvusPassword = string.Empty;
+                bool needsNolvusReentry = false;
+
+                try { userName = ServiceSingleton.Globals.NolvusUserName ?? string.Empty; }
+                catch { }
+                try { gameDirectory = ServiceSingleton.Settings.GetIniValue("Path", "GamePath") ?? string.Empty; }
+                catch { }
+                try
+                {
+                    nolvusPassword = ServiceSingleton.Lib.RetrieveCredential(ServiceSingleton.Globals.NolvusPassword);
+                }
+                catch (CryptographicException)
+                {
+                    needsNolvusReentry = true;
+                }
+
+                return (UserName: userName, GameDirectory: gameDirectory, NolvusPassword: nolvusPassword, NeedsNolvusReentry: needsNolvusReentry);
+            });
+
+            SettingsCache.NolvusUser = currentSettings.UserName;
+            SettingsCache.NolvusPassword = currentSettings.NolvusPassword;
+            SettingsCache.GameDirectory = currentSettings.GameDirectory;
+            SettingsCache.NexusApiKey = string.Empty;
+            SettingsCache.NolvusCredentialReentryRequired = currentSettings.NeedsNolvusReentry;
+            SettingsCache.NolvusCredentialReentryMessage = currentSettings.NeedsNolvusReentry
+                ? "The saved Nolvus password cannot be opened. Re-enter it to save with secure user-scoped storage."
+                : string.Empty;
+
+            await ServiceSingleton.Dashboard.LoadFrameAsync<NexusFrame>();
         }
 
         private async Task<InstanceCheck> CheckInstances()

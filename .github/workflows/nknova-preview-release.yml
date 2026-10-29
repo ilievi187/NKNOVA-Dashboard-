@@ -339,14 +339,14 @@ jobs:
 
           ## Included
           - Linux x64 Avalonia dashboard package and Windows x64 dashboard package.
-          - Linux and Windows package, resolver, and URL-redaction tests, plus extracted-application startup smoke tests.
+          - Linux and Windows package, resolver, URL-redaction, and platform credential-store tests, plus extracted-application startup smoke tests.
           - SHA-256 checksum files are attached.
 
           ## Limitations and safety
           - A complete live Nolvus installation was not performed. Use a separate backed-up test installation and do not overwrite a valuable modlist.
           - Automatic upstream self-update is disabled. Install later NKNOVA packages manually.
           - ImageSharp 3.2.0 contains the vendor-maintained v3 security backports and is built under the original issued assembly-scoped Community license. Security maintenance for ImageSharp 3.x ends on 12 May 2027.
-          - Newly saved credentials use authenticated AES-GCM with Windows user-scoped DPAPI or Linux Secret Service key storage. Legacy TripleDES-ECB values remain readable but are not silently migrated; users must explicitly re-enter and save old passwords. The legacy decrypt path has an unresolved CodeQL finding and needs review before any public release. No user credentials are included in this package.
+          - Newly saved credentials use authenticated AES-GCM with Windows user-scoped DPAPI or Linux Secret Service key storage. Legacy values are not decrypted; users must explicitly re-enter and save old passwords. No user credentials are included in this package.
           - .NET 10 runtime is required. Full Nolvus installation support on Windows has not been demonstrated.
           EOF
           printf '\n## Changelog\n\n' >> "$RUNNER_TEMP/preview-notes.md"

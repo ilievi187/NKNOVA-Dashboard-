@@ -24,6 +24,7 @@ namespace Nolvus.Services.Lib
         private const long MaximumRemoteImagePixels = 40_000_000;
         private static readonly HttpClient _http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         private readonly UserCredentialProtector _credentialProtector;
+        private readonly PlatformCredentialStore _credentialStore;
 
         public LibService() : this(null, null) { }
 
@@ -34,6 +35,7 @@ namespace Nolvus.Services.Lib
         public LibService(string? credentialStorageDirectory, string? secretServiceScope)
         {
             _credentialProtector = new UserCredentialProtector(credentialStorageDirectory, secretServiceScope);
+            _credentialStore = new PlatformCredentialStore(secretServiceScope ?? "default");
         }
 
         public Image GetImageFromUrl(string url)
@@ -178,60 +180,22 @@ namespace Nolvus.Services.Lib
             return ms.ToArray();
         }
 
-        public string EncryptString(string value)
-        {
-            return _credentialProtector.Protect(value);
-        }
+        public string StoreCredential(string value) => _credentialStore.Store(value);
 
-        public string DecryptString(string value)
+        public string RetrieveCredential(string value)
         {
             if (string.IsNullOrEmpty(value))
                 return string.Empty;
 
-            return UserCredentialProtector.IsProtectedValue(value)
-                ? _credentialProtector.Unprotect(value)
-                : DecryptLegacyString(value);
+            if (PlatformCredentialStore.IsReference(value))
+                return _credentialStore.Retrieve(value);
+
+            if (UserCredentialProtector.IsProtectedValue(value))
+                return _credentialProtector.Unprotect(value);
+
+            throw new LegacyCredentialReentryRequiredException();
         }
 
-        private static string DecryptLegacyString(string value)
-        {
-            // Legacy compatibility only. Bound untrusted input before allocating or decrypting.
-            // Legacy saves used Convert.ToBase64String without whitespace or line wrapping.
-            const int maximumLegacyCiphertextChars = 24 * 1024;
-            if (value.Length > maximumLegacyCiphertextChars || value.Length % 4 != 0)
-                throw new CryptographicException("Invalid legacy credential encoding.");
-
-            byte[] input;
-            try
-            {
-                input = Convert.FromBase64String(value);
-            }
-            catch (FormatException ex)
-            {
-                throw new CryptographicException("Invalid legacy credential encoding.", ex);
-            }
-
-            if (input.Length == 0 || input.Length % 8 != 0)
-                throw new CryptographicException("Invalid legacy credential length.");
-
-            string key = "1F2CAB925HFBBCAE589632FABC547892";
-            string iv = "ACtEDg70CcU=";
-
-            using var tripleDes = TripleDES.Create();
-            tripleDes.Key = Convert.FromBase64String(key);
-            tripleDes.IV = Convert.FromBase64String(iv);
-            tripleDes.Mode = CipherMode.ECB;
-            tripleDes.Padding = PaddingMode.PKCS7;
-
-            using var decryptor = tripleDes.CreateDecryptor(tripleDes.Key, tripleDes.IV);
-            using var ms = new MemoryStream();
-            using (var cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Write))
-            {
-                cs.Write(input, 0, input.Length);
-                cs.FlushFinalBlock();
-            }
-
-            return Encoding.UTF8.GetString(ms.ToArray());
-        }
+        public void DeleteCredentialReference(string reference) => _credentialStore.Delete(reference);
     }
 }

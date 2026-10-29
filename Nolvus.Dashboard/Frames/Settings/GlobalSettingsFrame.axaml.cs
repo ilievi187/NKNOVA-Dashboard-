@@ -37,7 +37,8 @@ namespace Nolvus.Dashboard.Frames.Settings
                 var settings = await Task.Run(() => new
                 {
                     MegaEmail = ServiceSingleton.Globals.MegaEmail,
-                    MegaPassword = ServiceSingleton.Globals.MegaPassword,
+                    MegaPassword = ReadMegaPassword(out bool passwordNeedsReentry),
+                    MegaPasswordNeedsReentry = passwordNeedsReentry,
                     MegaAnonymousConnection = ServiceSingleton.Globals.MegaAnonymousConnection,
                     NexusAutoClick = ServiceSingleton.Settings.NexusAutoClick
                 });
@@ -52,12 +53,36 @@ namespace Nolvus.Dashboard.Frames.Settings
                     DrpDwnLstProcessCount.SelectedIndex = CoreIndex(GetProcessorCores());
                     TglBtnAutoClick.IsChecked = settings.NexusAutoClick;
                 });
+
+                if (settings.MegaPasswordNeedsReentry)
+                {
+                    var owner = TopLevel.GetTopLevel(this) as Window;
+                    await NolvusMessageBox.Show(
+                        owner,
+                        "Saved Mega credential needs re-entry",
+                        "The saved password uses an unsupported legacy format or its secure item is unavailable. Enter it again and save to replace the old value.",
+                        MessageBoxType.Warning);
+                }
             }
             catch
             {
                 await ServiceSingleton.Dashboard.Error(
                     "Error during global settings loading",
                     "Saved credentials could not be loaded securely. On Linux, verify that the user keyring is installed and unlocked.");
+            }
+        }
+
+        private static string ReadMegaPassword(out bool requiresReentry)
+        {
+            try
+            {
+                requiresReentry = false;
+                return ServiceSingleton.Globals.MegaPassword;
+            }
+            catch (System.Security.Cryptography.CryptographicException)
+            {
+                requiresReentry = true;
+                return string.Empty;
             }
         }
 
@@ -126,6 +151,8 @@ namespace Nolvus.Dashboard.Frames.Settings
                     return;
                 }
 
+                string? passwordReference = null;
+                bool settingsCommitted = false;
                 try
                 {
                     bool anonymousConnection = TglBtnAnonymous.IsChecked == true;
@@ -135,25 +162,43 @@ namespace Nolvus.Dashboard.Frames.Settings
 
                     await Task.Run(() =>
                     {
-                        string protectedPassword = string.IsNullOrEmpty(password)
-                            ? string.Empty
-                            : ServiceSingleton.Lib.EncryptString(password);
+                        string? newPasswordReference = null;
+                        if (!string.IsNullOrEmpty(password))
+                        {
+                            newPasswordReference = ServiceSingleton.Lib.StoreCredential(password);
+                            passwordReference = newPasswordReference;
+                        }
 
                         SettingsService.UpdateIniFileAtomically(SettingsService.IniFile, data =>
                         {
                             data[GlobalsService.MegaSection][GlobalsService.MegaAnonymous] = anonymousConnection.ToString();
                             if (!string.IsNullOrEmpty(email))
                                 data[GlobalsService.MegaSection][GlobalsService.MegaUserName] = email;
-                            if (!string.IsNullOrEmpty(password))
-                                data[GlobalsService.MegaSection][GlobalsService.MegaPswd] = protectedPassword;
+                            if (newPasswordReference is not null)
+                                data[GlobalsService.MegaSection][GlobalsService.MegaPswd] = newPasswordReference;
                         });
                     });
+                    settingsCommitted = true;
 
+                    TxtBxPassword.Text = string.Empty;
                     NolvusMessageBox.Show(owner, "Information", "Your mega.nz configuration has been validating and saved", MessageBoxType.Info);
                     await UpdateButton("Save");
                 }
                 catch
                 {
+                    if (!settingsCommitted && !string.IsNullOrEmpty(passwordReference))
+                    {
+                        string referenceToDelete = passwordReference;
+                        try
+                        {
+                            await Task.Run(() => ServiceSingleton.Lib.DeleteCredentialReference(referenceToDelete));
+                        }
+                        catch
+                        {
+                            // Preserve the user-facing storage failure without logging credential data.
+                        }
+                    }
+
                     await UpdateButton("Save");
                     NolvusMessageBox.Show(
                         owner,

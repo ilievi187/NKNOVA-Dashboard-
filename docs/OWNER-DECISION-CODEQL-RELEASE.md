@@ -8,7 +8,7 @@ Status: **PR #29 is NOT mergeable.** No bypass, no self-approve, no self-merge, 
 
 ## 1. One-line status
 
-The only red check on PR #29 is the **aggregate `CodeQL`** gate, which fails because the real PR head still ships a **TripleDES-ECB legacy credential read path** in `Nolvus.Services/Lib/LibService.cs`. All 4 open code-scanning alerts map to that one file. A **stronger, cleaner remediation already exists but is uncommitted** (working tree of the `NKNOVA-Dashboard-` clone) and is therefore **not on the PR**.
+The only red check on PR #29 is the **aggregate `CodeQL`** gate, which fails because the real PR head still ships a **TripleDES-ECB legacy credential read path** in `Nolvus.Services/Lib/LibService.cs`. All 4 open code-scanning alerts map to that one file. A **stronger credential model** (`PlatformCredentialStore` + `LegacyCredentialReentryRequiredException`) already exists in the working tree of the `NKNOVA-Dashboard-` clone, **but** it is built on base `8eed5ba` (31 commits behind the real head `e180dc5`) and still references **ImageSharp 3.1.12** (vulnerable). Re-applying it onto `e180dc5` is a reconciliation, not a one-line commit (see §7).
 
 ---
 
@@ -50,11 +50,13 @@ These are **pre-existing on `main`** (not introduced by PR #29), but they persis
 
 ## 4. Two different implementations — do not conflate
 
-| location | commit | credential model | TripleDES? |
-|----------|--------|------------------|-----------|
-| **Real PR #29 head** (`e180dc5`) | committed | `UserCredentialProtector` (AES-GCM per-user) for *new* values, **plus** `DecryptLegacyString` TripleDES-ECB **read fallback** | **YES** (read path) |
-| **Local `NKNOVA-Dashboard-` branch** `8eed5ba` | committed | same as PR head (has `DecryptLegacyString`) | **YES** |
-| **Local `NKNOVA-Dashboard-` WORKING TREE** | **UNCOMMITTED** | `PlatformCredentialStore` (DPAPI / Secret Service) + `LegacyCredentialReentryRequiredException` guard + `UserCredentialProtector` AES-GCM; **no** `TripleDES`, **no** `CipherMode.ECB`, **no** `DecryptLegacyString` anywhere in the tree | **NO** |
+| location | commit | credential model | TripleDES? | ImageSharp |
+|----------|--------|------------------|-----------|-----------|
+| **Real PR #29 head** (`e180dc5`) | committed | `UserCredentialProtector` (AES-GCM per-user) for *new* values, **plus** `DecryptLegacyString` TripleDES-ECB **read fallback** | **YES** (read path) | **3.2.0** (patched) |
+| **Local `NKNOVA-Dashboard-` branch** `8eed5ba` (base of working tree) | committed | same as PR head (has `DecryptLegacyString`) | **YES** | **3.1.12** (vulnerable) |
+| **Local `NKNOVA-Dashboard-` WORKING TREE** | **UNCOMMITTED** | `PlatformCredentialStore` (DPAPI / Secret Service) + `LegacyCredentialReentryRequiredException` guard + `UserCredentialProtector` AES-GCM; **no** `TripleDES`, **no** `CipherMode.ECB`, **no** `DecryptLegacyString` anywhere in the tree | **NO** | **3.1.12** (vulnerable) |
+
+> **Reconciliation required:** the working tree removes TripleDES but is built on the older `8eed5ba` base (vulnerable ImageSharp, missing `283e02a` + Windows-package fixes). It cannot be committed verbatim onto `e180dc5` without regressing ImageSharp back to 3.1.12. See §7 Option A.
 
 Working-tree diff (18 modified + 2 new files, all uncommitted):
 - new: `Nolvus.Services/Lib/PlatformCredentialStore.cs`, `Nolvus.Services/Lib/LegacyCredentialReentryRequiredException.cs`
@@ -73,7 +75,10 @@ public string RetrieveCredential(string value)
 }
 ```
 
-**Local build + test (qwen copy, earlier):** 0 build errors; `Nolvus.Services.Tests` 6/6; `Nolvus.Package.Tests` 77 pass / 0 fail / 7 skipped. (Re-run against the committed remediation before asserting.)
+**Build/test status (as of 2026-10-29 01:10 UTC, both clones):**
+- `NKNOVA-Dashboard-` working tree (base `8eed5ba`): **0** `.cs` files reference `TripleDES`/`CipherMode.ECB`. **No build artifacts, no test logs** present in the clone.
+- `NKNOVA-Dashboard-qwen` (branch `pr29-codeql-doc`, HEAD `e9f2e4e`): 1 `.cs` file still references `TripleDES` (the `LibService.cs` on this doc-only branch). **No build artifacts, no test logs** present.
+- **Conclusion:** build/test evidence is **not currently reproducible** from either clone. It must be re-run on the reconciled tree (Option A) before asserting green.
 
 ---
 
@@ -105,14 +110,29 @@ So the `create-draft-release` job is **skipped on any branch push / PR** — it 
 
 ## 7. DECISION REQUIRED FROM OWNER
 
-### Option A — REMEDIATE (recommended; closes the gate legitimately)
-Commit the already-built working-tree remediation (DPAPI / Secret Service + AES-GCM + `LegacyCredentialReentryRequiredException`) onto the real PR #29 branch, removing the TripleDES-ECB read path. Then:
-1. `Nolvus.Services/Lib/LibService.cs` no longer references TripleDES/ECB → the 4 alerts have **no live code** to point at.
-2. Re-run CodeQL on the PR head → aggregate turns **green**.
-3. Re-run local build + `Nolvus.Services.Tests` / `Nolvus.Package.Tests`.
-4. Confirm no `cs/ecb-encryption` / `cs/weak-encryption` open alerts remain for that path (CodeQL re-analysis clears them).
-5. Only then un-draft PR #29 and merge.
+> **Important (corrected):** the working-tree remediation is **not a clean superset** of the real PR head.
+>
+> - The working-tree base is `8eed5ba`, which is **31 commits behind** the real PR head `e180dc5`.
+> - The 31 commits between them include real security work that the working tree does **not** carry:
+>   - `283e02a` security(credentials): bound and validate legacy ciphertext before decryption
+>   - `92f0045` / `0be7ae9` / `2eaad1c` settings: atomic symlink-safe writes + encrypted-only credential fields
+>   - `b5f5fef` / `2839c27` Windows-package: path-traversal + version-mismatch rejection
+>   - `922d72d` / `b759619` ImageSharp **3.2.0** upgrade (working tree is still on **3.1.12**, which is in the vulnerable range for CVE-2026-106113/106115)
+> - The working tree is therefore a **diverged older line**. Committing it verbatim onto `e180dc5` would **regress ImageSharp to 3.1.12** and **revert** the `283e02a` ciphertext-validation and Windows-package hardening.
 
+### Option A — REMEDIATE on the CURRENT PR HEAD (recommended; closes the gate legitimately)
+Re-apply the `PlatformCredentialStore` / `LegacyCredentialReentryRequiredException` credential model **onto the current PR head `e180dc5`** (i.e. onto the 3.2.0 + `283e02a` line), NOT onto the older `8eed5ba` base. Concretely:
+1. `git cherry-pick`/re-apply the two new files (`PlatformCredentialStore.cs`, `LegacyCredentialReentryRequiredException.cs`) and the `LibService.cs` / `ILibService.cs` / `UserCredentialProtector.cs` credential-model edits **on top of `e180dc5`**, keeping:
+   - ImageSharp **3.2.0** (do NOT let the working tree's 3.1.12 bleed in);
+   - `283e02a` legacy-ciphertext bound+validation (the new store must *coexist* with it, not replace it);
+   - the Windows-package security fixes.
+2. Result: `LibService.cs` no longer references TripleDES/ECB → the 4 alerts have **no live code** to point at.
+3. Re-run CodeQL on the PR head → aggregate turns **green**.
+4. Re-run local build + `Nolvus.Services.Tests` / `Nolvus.Package.Tests` on the reconciled tree.
+5. Confirm 0 open `cs/ecb-encryption` / `cs/weak-encryption` alerts remain for that path (CodeQL re-analysis clears them).
+6. Only then un-draft PR #29 and merge.
+
+> This is a **reconciliation task**, not a one-line commit, because the working tree and the real head have diverged. It must be done on the real head to avoid the ImageSharp regression above.
 This is the only path that is defensible as "stable" without an owner-signed exception.
 
 ### Option B — OWNER-APPROVED DISMISS (only if owner explicitly accepts the risk)

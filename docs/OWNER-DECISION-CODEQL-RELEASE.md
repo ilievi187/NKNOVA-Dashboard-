@@ -56,7 +56,7 @@ These are **pre-existing on `main`** (not introduced by PR #29), but they persis
 | **Local `NKNOVA-Dashboard-` branch** `8eed5ba` (base of working tree) | committed | same as PR head (has `DecryptLegacyString`) | **YES** | **3.1.12** (vulnerable) |
 | **Local `NKNOVA-Dashboard-` WORKING TREE** | **UNCOMMITTED** | `PlatformCredentialStore` (DPAPI / Secret Service) + `LegacyCredentialReentryRequiredException` guard + `UserCredentialProtector` AES-GCM; **no** `TripleDES`, **no** `CipherMode.ECB`, **no** `DecryptLegacyString` anywhere in the tree | **NO** | **3.1.12** (vulnerable) |
 
-> **Reconciliation required:** the working tree removes TripleDES but is built on the older `8eed5ba` base (vulnerable ImageSharp, missing `283e02a` + Windows-package fixes). It cannot be committed verbatim onto `e180dc5` without regressing ImageSharp back to 3.1.12. See §7 Option A.
+> **Reconciliation required:** the working-tree credential changes remove TripleDES but were developed against the `8eed5ba` base. The 31 commits between `8eed5ba` and `e180dc5` include `283e02a` (which also modified `LibService.cs` — ciphertext validation/bounding) and `922d72d` (ImageSharp 3.1.12 → 3.2.0 in `.csproj`). The 20 uncommitted changes **do not touch any `.csproj` file**, so re-applying them onto `e180dc5` will **not** regress ImageSharp. The integration risk is in `LibService.cs` specifically: `283e02a` added ciphertext-validation logic that the working-tree `LibService.cs` rewrite must preserve or supersede correctly. See §7 Option A.
 
 Working-tree diff (18 modified + 2 new files, all uncommitted):
 - new: `Nolvus.Services/Lib/PlatformCredentialStore.cs`, `Nolvus.Services/Lib/LegacyCredentialReentryRequiredException.cs`
@@ -118,15 +118,15 @@ So the `create-draft-release` job is **skipped on any branch push / PR** — it 
 
 ## 7. DECISION REQUIRED FROM OWNER
 
-> **Important (corrected):** the working-tree remediation is **not a clean superset** of the real PR head.
->
-> - The working-tree base is `8eed5ba`, which is **31 commits behind** the real PR head `e180dc5`.
-> - The 31 commits between them include real security work that the working tree does **not** carry:
+> **Important (verified):** the local branch `fix/nknova-user-scoped-credentials` at `8eed5ba` is a **true ancestor** of the PR head `e180dc5` (0 commits ahead, 31 behind). It is **not diverged** — it is a strict subset. The 20 uncommitted working-tree changes **do not touch any `.csproj` files**, so they cannot regress ImageSharp. However, they were developed against `8eed5ba`, which predates 31 commits of security work:
 >   - `283e02a` security(credentials): bound and validate legacy ciphertext before decryption
+>   - `ac73a1c` test(credentials): reject malformed and oversized legacy ciphertext without writes
+>   - `b5f5fef` / `2839c27` / `13130e0` Windows-package: path-traversal + version-mismatch + embedded-updater rejection
 >   - `92f0045` / `0be7ae9` / `2eaad1c` settings: atomic symlink-safe writes + encrypted-only credential fields
->   - `b5f5fef` / `2839c27` Windows-package: path-traversal + version-mismatch rejection
->   - `922d72d` / `b759619` ImageSharp **3.2.0** upgrade (working tree is still on **3.1.12**, which is in the vulnerable range for CVE-2026-106113/106115)
-> - The working tree is therefore a **diverged older line**. Committing it verbatim onto `e180dc5` would **regress ImageSharp to 3.1.12** and **revert** the `283e02a` ciphertext-validation and Windows-package hardening.
+>   - `922d72d` / `b759619` ImageSharp **3.2.0** upgrade + license gate (working-tree base `8eed5ba` is still on **3.1.12**)
+>   - `24925a4` fix(release): require actual CodeQL main checks instead of PR-only aggregate
+>
+> The reconciliation task is to **re-apply** the uncommitted credential-model changes onto `e180dc5` (same branch, 31 commits ahead), ensuring they integrate correctly with `283e02a` (which modified `LibService.cs`) and the Windows-package fixes. Since `8eed5ba` is an ancestor, a fast-forward + re-apply is the mechanical path.
 
 ### Option A — REMEDIATE on the CURRENT PR HEAD (recommended; closes the gate legitimately)
 Re-apply the `PlatformCredentialStore` / `LegacyCredentialReentryRequiredException` credential model **onto the current PR head `e180dc5`** (i.e. onto the 3.2.0 + `283e02a` line), NOT onto the older `8eed5ba` base. Concretely:
@@ -158,7 +158,7 @@ Re-apply the `PlatformCredentialStore` / `LegacyCredentialReentryRequiredExcepti
 5. Confirm 0 open `cs/ecb-encryption` / `cs/weak-encryption` alerts remain for that path (CodeQL re-analysis clears them).
 6. Only then un-draft PR #29 and merge.
 
-> This is a **reconciliation task**, not a one-line commit, because the working tree and the real head have diverged. It must be done on the real head to avoid the ImageSharp regression above.
+> This is a **reconciliation task**, not a one-line commit, because `283e02a` also modified `LibService.cs` (ciphertext validation) and the working-tree rewrite must integrate with it. The 20 uncommitted changes do **not** touch any `.csproj` file, so ImageSharp 3.2.0 is preserved automatically.
 This is the only path that is defensible as "stable" without an owner-signed exception.
 
 ### Option B — OWNER-APPROVED DISMISS (only if owner explicitly accepts the risk)

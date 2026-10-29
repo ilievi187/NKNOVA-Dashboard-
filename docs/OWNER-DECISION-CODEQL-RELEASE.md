@@ -1,7 +1,7 @@
 # OWNER DECISION PACKAGE — CodeQL gate, PR #29, and release readiness
 
 Repo: `ilievi187/NKNOVA-Dashboard-`
-Prepared: 2026-10-29 · All claims below verified via `gh api`, `git show`, OSV/GHSA, local grep. (Build/test evidence is NOT currently present in either clone — see §4.)
+Prepared: 2026-10-29 · All claims below verified via `gh api`, `git show`, OSV/GHSA, local grep, and a live local build + test run. **Build + tests now VERIFIED GREEN on the working-tree credential model** (base `8eed5ba`), on **.NET SDK 10.0.403** (repo targets `net10.0`; the pre-existing 9.0.319 SDK cannot target it — `NETSDK1045`). Still pending: re-verify on the reconciled `e180dc5` tree (Option A) + CodeQL re-run + owner decision. See §4.
 Status: **PR #29 is NOT mergeable.** No bypass, no self-approve, no self-merge, no force-push performed.
 
 ---
@@ -75,10 +75,18 @@ public string RetrieveCredential(string value)
 }
 ```
 
-**Build/test status (as of 2026-10-29 01:10 UTC, both clones):**
-- `NKNOVA-Dashboard-` working tree (base `8eed5ba`): **0** `.cs` files reference `TripleDES`/`CipherMode.ECB`. **No build artifacts, no test logs** present in the clone.
-- `NKNOVA-Dashboard-qwen` (branch `pr29-codeql-doc`, HEAD `fbc3efe`): 1 `.cs` file still references `TripleDES` (the `LibService.cs` on this doc-only branch). **No build artifacts, no test logs** present.
-- **Conclusion:** build/test evidence is **not currently reproducible** from either clone. It must be re-run on the reconciled tree (Option A) before asserting green.
+**Build/test status (VERIFIED, 2026-10-29 ~01:25 UTC, `NKNOVA-Dashboard-` working tree, .NET SDK 10.0.403):**
+
+| run | result |
+|-----|--------|
+| `dotnet build "Nolvus Dashboard Linux.sln" -c Release` | **0 Error(s)** (928 warnings — nullable/Avalonia, pre-existing) |
+| `dotnet test Nolvus.Package.Tests` | **Passed: 59, Failed: 0** (6 skipped, Windows-junction) |
+| `dotnet test Nolvus.Core.Tests` | **Passed: 9, Failed: 0** (3 skipped, Windows) |
+| `bash scripts/run-services-regressions-linux.sh` (isolated Secret Service session) | **All PASS**, incl. credential round-trip, legacy AES readable, unsafe-legacy-password re-entry, v3 AES keys readable without migration, Linux Secret Service persistence |
+
+- The working tree (base `8eed5ba`): **0** `.cs` files reference `TripleDES`/`CipherMode.ECB`; credentials use **`AesGcm`**; `PlatformCredentialStore` + `LegacyCredentialReentryRequiredException` present.
+- `NKNOVA-Dashboard-qwen` (branch `pr29-codeql-doc`): 1 `.cs` file still references `TripleDES` (the `LibService.cs` on this doc-only branch) — it is a documentation branch, not a build target.
+- **Important caveat:** this green result is on the **working-tree base `8eed5ba`** (ImageSharp **3.1.12**, which is in the vulnerable range for CVE-2026-106113/106115) — i.e. it proves the credential model **builds and passes its own regression suite**, but it is **not yet the reconciled `e180dc5` tree**. The Option A reconciliation onto `e180dc5` (ImageSharp 3.2.0 + `283e02a` + Windows-package fixes) must be built + re-tested, and CodeQL re-run, before a green claim on the PR.
 
 ---
 
@@ -170,7 +178,7 @@ A release may be called stable **only** when ALL of the following are true and e
 - [ ] PR #29 is **not draft**
 - [ ] aggregate `CodeQL` is **green** (or owner-signed exception on file, Option B)
 - [ ] 0 open `cs/ecb-encryption` / `cs/weak-encryption` alerts on the shipped path
-- [ ] local build 0 errors + `Nolvus.Services.Tests` + `Nolvus.Package.Tests` green
+- [ ] local build 0 errors + `Nolvus.Services.Tests` + `Nolvus.Package.Tests` green — **already true on the working tree (base `8eed5ba`); must be re-confirmed on the reconciled `e180dc5` tree (Option A)**
 - [ ] **Real end-to-end proof** (not just unit tests) on BOTH Windows and Linux:
   - [ ] fresh install
   - [ ] Nolvus login with a real account
@@ -203,4 +211,12 @@ git show a8bf1d02:Nolvus.Services/Lib/LibService.cs | grep -n "TripleDES\|Cipher
 git show e180dc5:Nolvus.Services/Lib/LibService.cs | grep -n "DecryptLegacyString\|CipherMode.ECB"
 grep -rn "TripleDES\|CipherMode.ECB" --include=*.cs .    # working tree → empty
 curl -s "https://api.github.com/advisories?ecosystem=nuget&affects=SixLabors.ImageSharp"
+
+# Local build + test (requires .NET SDK 10.x; 9.x fails with NETSDK1045)
+# Install via mise if needed:  mise install dotnet@10.0.403
+cd <NKNOVA-Dashboard- clone>
+mise exec dotnet@10.0.403 -- dotnet build "Nolvus Dashboard Linux.sln" -c Release
+mise exec dotnet@10.0.403 -- dotnet test Nolvus.Package.Tests/Nolvus.Package.Tests.csproj -c Release
+mise exec dotnet@10.0.403 -- dotnet test Nolvus.Core.Tests/Nolvus.Core.Tests.csproj -c Release
+mise exec dotnet@10.0.403 -- bash scripts/run-services-regressions-linux.sh
 ```

@@ -5,18 +5,24 @@ Status: **BLOCKED on owner sign-off.** Do not merge, dismiss, force-push, or sel
 ## The red gate
 
 - PR #29 `fix/nknova-user-scoped-credentials` — head `e180dc5`, `OPEN`, `MERGEABLE`, **draft**, `mergeStateStatus:BLOCKED` (draft only; `main` has **no** required status checks).
-- CI: 20/21 checks green. The one red is the **aggregate `CodeQL` / code-scanning gate**, driven by 4 `high` alerts.
+- CI: 16 SUCCESS / 1 SKIPPED / **1 FAILURE**. The single red is the **aggregate `CodeQL` check** (from `github-advanced-security`, no workflow). The three language-specific CodeQL sub-checks — `CodeQL (csharp)`, `CodeQL (rust)`, `CodeQL (actions)` — all **SUCCESS**.
+
+### Why the aggregate fails while the language sub-checks pass
+
+The aggregate `CodeQL` gate is a **repository-level code-scanning gate**: it goes red if *any* open code-scanning alert is present in the repository, regardless of which commit introduced it. The four open alerts (below) were created 2026-10-23 against `main`. PR #29's sync moved the legacy `ECB` block from lines 178/203 to line 223 (refactor removed the encrypt-path ECB, kept only the read-only decrypt fallback), so the same rules now annotate a different line — the aggregate gate re-fires on the PR head. The language-specific `CodeQL (csharp)` job only reports *new* findings introduced by the diff on that head; because the legacy path was already flagged on `main`, the csharp job sees no *new* finding and passes. The aggregate gate, by design, does not distinguish pre-existing vs. new.
 
 ## The 4 open alerts — all PRE-EXISTING on `main` (not introduced by PR #29)
 
-| # | rule | severity | location | created | on commit / ref |
-|---|------|----------|----------|---------|-----------------|
-| 1 | `cs/ecb-encryption` | high | `Nolvus.Services/Lib/LibService.cs:178` | 2026-10-23 | `a8bf1d02` / `main` |
-| 2 | `cs/ecb-encryption` | high | `Nolvus.Services/Lib/LibService.cs:203` | 2026-10-23 | `a8bf1d02` / `main` |
-| 3 | `cs/weak-encryption` | high | `Nolvus.Services/Lib/LibService.cs:174` | 2026-10-23 | `a8bf1d02` / `main` |
-| 4 | `cs/weak-encryption` | high | `Nolvus.Services/Lib/LibService.cs:199` | 2026-10-23 | `a8bf1d02` / `main` |
+Severity per GitHub REST API: **`warning`** (not `high`; `blocking: null`, `dismissal_state: null`).
 
-All four were created **2026-10-23 against `a8bf1d02` on `main`** — before the PR #29 sync. They come from the legacy `TripleDES`/`ECB` + hardcoded-key block. PR #29 *reduces* the legacy surface: on the PR head, `EncryptString` → `UserCredentialProtector.Protect` (AES-GCM `v3`); only the private read-only fallback `DecryptLegacyString` retains legacy crypto.
+| # | rule | severity | location (on `main`) | location (PR head) | created |
+|---|------|----------|----------------------|--------------------|---------|
+| 1 | `cs/ecb-encryption` | warning | `LibService.cs:178` | `LibService.cs:223` | 2026-10-23 |
+| 2 | `cs/ecb-encryption` | warning | `LibService.cs:203` | `LibService.cs:223` | 2026-10-23 |
+| 3 | `cs/weak-encryption` | warning | `LibService.cs:174` | (removed on PR head) | 2026-10-23 |
+| 4 | `cs/weak-encryption` | warning | `LibService.cs:199` | (removed on PR head) | 2026-10-23 |
+
+All four were created **2026-10-23 against `a8bf1d02` on `main`** — before the PR #29 sync. On `main`, the legacy `TripleDES`/`ECB` + hardcoded-key block appears in **two** places (`EncryptString` at line 178, `DecryptString` at line 203). PR #29 *reduces* the legacy surface: `EncryptString` now delegates to `UserCredentialProtector.Protect` (AES-GCM `v3`); only the private read-only fallback `DecryptLegacyString` (line 196–235, ECB at line 223) retains legacy crypto.
 
 ## Why this is load-bearing (do not delete blindly)
 
@@ -37,9 +43,21 @@ All four were created **2026-10-23 against `a8bf1d02` on `main`** — before the
 - The PR's **own** test at `Program.cs:106` requires reading to be **non-mutating**. Option A with read-time write-back **violates that test**. So Option A requires either:
   - (a) a **separate explicit migration step** (not a silent read), e.g. an explicit "upgrade credentials" action + one-time boot migration, **and** flipping the `:106` assertion to allow the migration path; or
   - (b) keep read non-mutating and migrate **only** at first-run / settings-save time.
-- Either way this is a **breaking behavior change** and needs a **real-user Windows/Linux Nolvus/Mega/Nexus login smoke** after migration — which I **cannot self-verify** (no local .NET SDK on this machine). CI alone is representative, not acceptance.
+- Either way this is a **breaking behavior change** and needs a **real-user Windows/Linux Nolvus/Mega/Nexus login smoke** after migration. Local build + test **is** available on this machine (`.NET 9.0.319` + `10.0.402` SDKs, confirmed 2026-10-29), so the build/test regression can be self-verified before hand-off; the remaining acceptance gap is **real-user install + login on Windows and Linux**, which local CI cannot substitute.
 
 **Owner action:** approve the migration approach (a or b) + confirm who runs the real-user login smoke. I then implement on `pr29-sync` for review.
+
+## Local validation (2026-10-29, on PR head `e180dc5`)
+
+`.NET 10.0.402` SDK + `9.0.319` present on this Linux host. Ran locally (Release, `net10.0`):
+
+| Check | Result |
+|-------|--------|
+| `dotnet build` full solution | **0 errors**, 211 pre-existing warnings (all `CS86xx` nullability + `SYSLIB0014` WebClient obsolescence — not introduced by PR #29) |
+| `dotnet run Nolvus.Services.Tests` (console, `dotnet run`) | **6 / 6 PASS** — incl. `user-scoped credentials encrypt, persist, authenticate, and retain legacy read compatibility`, `settings preserve legacy credentials and round-trip newly protected Nexus keys`, `Linux credential keys persist through the current user's Secret Service` |
+| `dotnet test Nolvus Dashboard Linux.sln` (xUnit) | **Nolvus.Package.Tests: 77 pass / 0 fail / 7 skipped** (skips are Windows-junction + Fluorine-platform tests that self-skip on Linux) |
+
+These are representative (not acceptance): they prove the PR head compiles and its unit/integration tests pass on Linux, but they do **not** prove real-user Windows/Linux install, Nolvus/Mega/Nexus login, mod download, Mod Organizer, or backup/rollback.
 
 ## Option B — formal dismiss of the 4 pre-existing alerts (fastest, owner-only)
 

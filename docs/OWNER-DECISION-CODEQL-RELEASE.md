@@ -122,10 +122,28 @@ So the `create-draft-release` job is **skipped on any branch push / PR** — it 
 
 ### Option A — REMEDIATE on the CURRENT PR HEAD (recommended; closes the gate legitimately)
 Re-apply the `PlatformCredentialStore` / `LegacyCredentialReentryRequiredException` credential model **onto the current PR head `e180dc5`** (i.e. onto the 3.2.0 + `283e02a` line), NOT onto the older `8eed5ba` base. Concretely:
-1. `git cherry-pick`/re-apply the two new files (`PlatformCredentialStore.cs`, `LegacyCredentialReentryRequiredException.cs`) and the `LibService.cs` / `ILibService.cs` / `UserCredentialProtector.cs` credential-model edits **on top of `e180dc5`**, keeping:
-   - ImageSharp **3.2.0** (do NOT let the working tree's 3.1.12 bleed in);
-   - `283e02a` legacy-ciphertext bound+validation (the new store must *coexist* with it, not replace it);
-   - the Windows-package security fixes.
+
+**Reconciliation scope (verified by diffing `8eed5ba..e180dc5` and working-tree grep):**
+
+| file | action on top of `e180dc5` |
+|------|---------------------------|
+| `Nolvus.Services/Lib/PlatformCredentialStore.cs` | **new** — copy from working tree |
+| `Nolvus.Services/Lib/LegacyCredentialReentryRequiredException.cs` | **new** — copy from working tree |
+| `Nolvus.Services/Lib/LibService.cs` | replace `EncryptString`/`DecryptString` + TripleDES body with `StoreCredential`/`RetrieveCredential`/`DeleteCredentialReference` + `_credentialStore` |
+| `Nolvus.Core/Interfaces/ILibService.cs` | replace 2-method interface with 3-method interface |
+| `Nolvus.Services/Globals/GlobalsService.cs` | `EncryptString`→`StoreCredential`, `DecryptString`→`RetrieveCredential` |
+| `Nolvus.Services/Settings/SettingsService.cs` | `EncryptString`→`StoreCredential`, remove legacy envelope validation (replaced by `283e02a` + new store) |
+| `Nolvus.Dashboard/Frames/StartFrame.axaml.cs` | `DecryptString`→`RetrieveCredential` |
+| `Nolvus.Dashboard/Frames/Settings/GlobalSettingsFrame.axaml.cs` | `EncryptString`→`StoreCredential`, add `DeleteCredentialReference` call on credential change |
+| `Nolvus.Services.Tests/Program.cs` | full test rewrite (working tree has 642 lines of credential tests; real head has 500 lines of legacy tests) |
+| `Nolvus.Services/Lib/UserCredentialProtector.cs` | adapt to work with `PlatformCredentialStore` (working tree version) |
+
+**Constraints to preserve (do NOT regress):**
+- ImageSharp **3.2.0** (do NOT let the working tree's 3.1.12 bleed in);
+- `283e02a` legacy-ciphertext bound+validation (the new store must *coexist* with it, not replace it);
+- the Windows-package security fixes (`b5f5fef` / `2839c27`).
+
+1. Apply the file table above **on top of `e180dc5`**.
 2. Result: `LibService.cs` no longer references TripleDES/ECB → the 4 alerts have **no live code** to point at.
 3. Re-run CodeQL on the PR head → aggregate turns **green**.
 4. Re-run local build + `Nolvus.Services.Tests` / `Nolvus.Package.Tests` on the reconciled tree.

@@ -1,7 +1,7 @@
 # OWNER DECISION PACKAGE — CodeQL gate, PR #29, and release readiness
 
 Repo: `ilievi187/NKNOVA-Dashboard-`
-Prepared: 2026-10-29 · All claims below verified via `gh api`, `git show`, OSV/GHSA, local build+test.
+Prepared: 2026-10-29 · All claims below verified via `gh api`, `git show`, OSV/GHSA, local grep. (Build/test evidence is NOT currently present in either clone — see §4.)
 Status: **PR #29 is NOT mergeable.** No bypass, no self-approve, no self-merge, no force-push performed.
 
 ---
@@ -77,7 +77,7 @@ public string RetrieveCredential(string value)
 
 **Build/test status (as of 2026-10-29 01:10 UTC, both clones):**
 - `NKNOVA-Dashboard-` working tree (base `8eed5ba`): **0** `.cs` files reference `TripleDES`/`CipherMode.ECB`. **No build artifacts, no test logs** present in the clone.
-- `NKNOVA-Dashboard-qwen` (branch `pr29-codeql-doc`, HEAD `e9f2e4e`): 1 `.cs` file still references `TripleDES` (the `LibService.cs` on this doc-only branch). **No build artifacts, no test logs** present.
+- `NKNOVA-Dashboard-qwen` (branch `pr29-codeql-doc`, HEAD `fbc3efe`): 1 `.cs` file still references `TripleDES` (the `LibService.cs` on this doc-only branch). **No build artifacts, no test logs** present.
 - **Conclusion:** build/test evidence is **not currently reproducible** from either clone. It must be re-run on the reconciled tree (Option A) before asserting green.
 
 ---

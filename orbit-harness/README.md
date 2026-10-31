@@ -79,3 +79,5 @@ The current ALEX source of truth is on NightKnightPC at `/home/nightknight/Proje
 ## Parallel agent development (Sprint 1)
 
 See [`AGENTS.md`](AGENTS.md) and [`docs/agents/MISSIONS.md`](docs/agents/MISSIONS.md). These are *instructions and task definitions*, not active autonomous processes. Agent execution requires a separately installed/authorized runner and access to the dedicated ORBIT repository. GitHub Actions runs tests only.
+
+To launch GitHub coding agents in a dedicated repository, see [GitHub Launch](docs/agents/GITHUB-LAUNCH.md). Custom agent profiles are in `.github/agents/`; they are not running processes.

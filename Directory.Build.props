@@ -1,0 +1,7 @@
+<Project>
+  <!-- The assembly-scoped Six Labors community license may live at the repository root. -->
+  <!-- Do not override explicit MSBuild or environment-based license configuration. -->
+  <PropertyGroup Condition="'$(SixLaborsLicenseFile)' == '' and '$(SixLaborsLicenseKey)' == '' and Exists('$(MSBuildThisFileDirectory)sixlabors.lic')">
+    <SixLaborsLicenseFile>$(MSBuildThisFileDirectory)sixlabors.lic</SixLaborsLicenseFile>
+  </PropertyGroup>
+</Project>

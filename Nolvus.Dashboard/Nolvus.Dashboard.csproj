@@ -7,8 +7,8 @@
     <Nullable>enable</Nullable>
     <AssemblyVersion>0.1.0.0</AssemblyVersion>
     <FileVersion>0.1.0.0</FileVersion>
-    <Version>0.1.0-preview.2</Version>
-    <InformationalVersion>0.1.0-preview.2</InformationalVersion>
+    <Version>0.1.0-preview.3</Version>
+    <InformationalVersion>0.1.0-preview.3</InformationalVersion>
     <AssemblyName>NolvusDashboard</AssemblyName>
     <InvariantGlobalization>false</InvariantGlobalization>
 
@@ -28,7 +28,7 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.8" />
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.3.8" />
     <PackageReference Include="Avalonia.Labs.Gif" Version="11.3.1" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.2.0" />
     <PackageReference Include="CefGlue.Common" Version="120.6099.211" />
     <PackageReference Include="CefGlue.Avalonia" Version="120.6099.211" />
     <!-- CVE-2024-43485: keep CefGlue's vulnerable System.Text.Json dependency on the patched .NET 9 servicing line. -->

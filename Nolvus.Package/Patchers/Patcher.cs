@@ -92,7 +92,7 @@ namespace Nolvus.Package.Patchers
                     }
                     else
                     {
-                        throw ex;
+                        throw;
                     }       
                 }
             });
@@ -157,7 +157,7 @@ namespace Nolvus.Package.Patchers
                 catch (Exception ex)
                 {
                     ServiceSingleton.Logger.Log(string.Format("Error during patching file extract {0} with error {1}", PatchArchive, ex.Message));
-                    throw ex;
+                    throw;
                 }
             });
 
@@ -193,7 +193,7 @@ namespace Nolvus.Package.Patchers
                 catch (Exception ex)
                 {
                     ServiceSingleton.Logger.Log(string.Format("Error during file patching {0} with error {1}", PatchArchive, ex.Message));
-                    throw ex;
+                    throw;
                 }
             });
 

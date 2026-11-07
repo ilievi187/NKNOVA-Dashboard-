@@ -73,7 +73,7 @@ namespace Nolvus.Package.Files
                 }
                 catch (Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
 

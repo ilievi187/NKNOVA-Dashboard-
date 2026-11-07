@@ -377,7 +377,7 @@ namespace Nolvus.Package.Mods
                 {
                     ServiceSingleton.Logger.Log(string.Format("Error during unpacking mod {0} with error {1}", Name, ex.Message));
                     ServiceSingleton.Files.RemoveDirectory(Path.Combine(ServiceSingleton.Folders.ExtractDirectory, ExtractSubDir), true);
-                    throw ex;
+                    throw;
                 }
             });
 
@@ -459,7 +459,7 @@ namespace Nolvus.Package.Mods
                 }
                 catch (Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
 

@@ -40,7 +40,7 @@ namespace Nolvus.Services.Files
                 }
                 catch (Exception Ex)
                 {
-                    throw Ex;
+                    throw;
                 }
                 
             });

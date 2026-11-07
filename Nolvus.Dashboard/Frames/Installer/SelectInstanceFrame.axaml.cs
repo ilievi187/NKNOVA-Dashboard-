@@ -77,7 +77,7 @@ namespace Nolvus.Dashboard.Frames.Installer
                             dto.AvaloniaImage = null;
                         }
                     }
-                    catch (Exception ex)
+                    catch (Exception)
                     {
                         dto.AvaloniaImage = null;
                     }

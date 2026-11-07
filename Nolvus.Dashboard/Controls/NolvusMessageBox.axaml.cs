@@ -49,7 +49,8 @@ namespace Nolvus.Dashboard.Controls
                 MessageBoxType.Info => "avares://NolvusDashboard/Assets/Info.png",
                 MessageBoxType.Warning => "avares://NolvusDashboard/Assets/Warning-Message.png",
                 MessageBoxType.Error => "avares://NolvusDashboard/Assets/Wrong-WF.png",
-                MessageBoxType.Question => "avares://NolvusDashboard/Assets/Question.png"
+                MessageBoxType.Question => "avares://NolvusDashboard/Assets/Question.png",
+                _ => "avares://NolvusDashboard/Assets/Info.png"
             };
 
             try 
@@ -58,7 +59,7 @@ namespace Nolvus.Dashboard.Controls
                 using var stream = AssetLoader.Open(uri);
                 ImgIcon.Source = new Bitmap(stream);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 Console.WriteLine("Failed to load messagebox icon");
             }

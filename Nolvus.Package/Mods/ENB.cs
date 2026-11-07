@@ -54,7 +54,7 @@ namespace Nolvus.Package.Mods
                 }
                 catch (Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
 
@@ -74,7 +74,7 @@ namespace Nolvus.Package.Mods
                 }
                 catch (Exception ex)
                 {
-                    throw ex;
+                    throw;
                 }
             });
 

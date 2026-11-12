@@ -58,14 +58,26 @@ function New-NknovaReproducibleZip {
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $projectFile = Join-Path $repositoryRoot 'Nolvus.Dashboard/Nolvus.Dashboard.csproj'
+$projectText = Get-Content -LiteralPath $projectFile -Raw
+$versionMatch = [regex]::Match($projectText, '<Version>([^<]+)</Version>')
+if (-not $versionMatch.Success) { throw 'Dashboard project version was not found.' }
+$projectVersion = $versionMatch.Groups[1].Value
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    $projectText = Get-Content -LiteralPath $projectFile -Raw
-    $versionMatch = [regex]::Match($projectText, '<Version>([^<]+)</Version>')
-    if (-not $versionMatch.Success) { throw 'Dashboard project version was not found.' }
-    $Version = $versionMatch.Groups[1].Value
+    $Version = $projectVersion
+}
+
+# Validate before creating directories or invoking publish: this value is used in
+# temporary and output paths, and must not contain separators or traversal.
+$versionPattern = '^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$'
+if ($Version -cnotmatch $versionPattern) {
+    throw 'Invalid package version: expected a safe semantic version.'
+}
+if ($Version -cne $projectVersion) {
+    throw "Package version does not match Dashboard project version ($projectVersion)."
 }
 
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
+
 $tempRoot = if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
     [System.IO.Path]::GetTempPath()
 } else {
@@ -100,7 +112,7 @@ foreach ($document in @('README.md', 'CHANGELOG.md', 'THIRD-PARTY-NOTICES.md')) 
 }
 $documentationDirectory = Join-Path $publishDirectory 'docs'
 New-Item -ItemType Directory -Path $documentationDirectory -Force | Out-Null
-foreach ($document in @('INSTALLATION.md', 'TROUBLESHOOTING.md', 'RELEASING.md')) {
+foreach ($document in @('INSTALLATION.md', 'TROUBLESHOOTING.md', 'CREDENTIALS.md', 'RELEASING.md')) {
     Copy-Item -LiteralPath (Join-Path $repositoryRoot "docs/$document") -Destination $documentationDirectory
 }
 Get-ChildItem -LiteralPath $publishDirectory -Recurse -File -Filter '*.pdb' | Remove-Item -Force
@@ -117,7 +129,7 @@ if (Test-Path -LiteralPath (Join-Path $publishDirectory 'NolvusLauncher.exe')) {
 }
 
 $unexpectedFiles = Get-ChildItem -LiteralPath $publishDirectory -Recurse -File |
-    Where-Object { $_.Extension -in @('.pdb', '.esp', '.esm', '.bsa') -or $_.Name -eq 'SkyrimSE.exe' }
+    Where-Object { $_.Extension -in @('.pdb', '.esp', '.esm', '.bsa') -or $_.Name -in @('SkyrimSE.exe', 'NolvusUpdater.exe', 'NolvusLauncher.exe') }
 if ($unexpectedFiles.Count -gt 0) {
     throw "Unexpected debug symbols or game data found: $($unexpectedFiles.FullName -join ', ')"
 }
@@ -129,7 +141,7 @@ try {
     if (-not ($entries -contains 'NolvusDashboard.exe')) {
         throw 'The Windows archive is missing NolvusDashboard.exe.'
     }
-    foreach ($requiredFile in @('LICENSE', 'THIRD-PARTY-NOTICES.md', 'docs/INSTALLATION.md', 'docs/TROUBLESHOOTING.md')) {
+    foreach ($requiredFile in @('LICENSE', 'THIRD-PARTY-NOTICES.md', 'docs/INSTALLATION.md', 'docs/TROUBLESHOOTING.md', 'docs/CREDENTIALS.md')) {
         if (-not ($entries -contains $requiredFile)) {
             throw "The Windows archive is missing required documentation: $requiredFile"
         }
@@ -139,7 +151,7 @@ try {
             throw "Unsafe path in Windows archive: $entry"
         }
     }
-    if ($entries | Where-Object { $_ -match '\.pdb$|\.esp$|\.esm$|\.bsa$|(^|/)SkyrimSE\.exe$|(^|/)NolvusLauncher\.exe$' }) {
+    if ($entries | Where-Object { $_ -match '\.pdb$|\.esp$|\.esm$|\.bsa$|(^|/)(SkyrimSE|NolvusUpdater|NolvusLauncher)\.exe$' }) {
         throw 'The Windows release archive contains debug symbols or game data.'
     }
 }
@@ -172,12 +184,34 @@ $env:LOCALAPPDATA = Join-Path $smokeHome 'AppData/Local'
 New-Item -ItemType Directory -Path $env:APPDATA,$env:LOCALAPPDATA -Force | Out-Null
 
 $process = Start-Process -FilePath $extractedAppHost -WorkingDirectory $extractionDirectory -PassThru
-Start-Sleep -Seconds 15
-$process.Refresh()
-if ($process.HasExited) {
-    throw "Windows dashboard exited during startup smoke test (exit code $($process.ExitCode))."
+try {
+    Start-Sleep -Seconds 15
+    $process.Refresh()
+    if ($process.HasExited) {
+        throw "Windows dashboard exited during startup smoke test (exit code $($process.ExitCode))."
+    }
 }
-& taskkill.exe /PID $process.Id /T /F | Out-Null
+finally {
+    # A leftover smoke-test process can keep files or user-profile state in use.
+    # Treat failed cleanup as a packaging failure rather than claiming a clean test.
+    try {
+        $process.Refresh()
+        if (-not $process.HasExited) {
+            & taskkill.exe /PID $process.Id /T /F | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw "Could not stop the Windows dashboard smoke-test process tree (PID $($process.Id))."
+            }
+            $null = $process.WaitForExit(10000)
+            $process.Refresh()
+            if (-not $process.HasExited) {
+                throw "Windows dashboard smoke-test process (PID $($process.Id)) remained alive after taskkill."
+            }
+        }
+    }
+    finally {
+        $process.Dispose()
+    }
+}
 
 "$hash  $(Split-Path -Leaf $archivePath)" | Set-Content -LiteralPath $checksumPath -Encoding ascii
 Write-Output "Windows archive validated: $archivePath"

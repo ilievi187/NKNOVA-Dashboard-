@@ -72,8 +72,10 @@ jobs:
         run: dotnet test "Nolvus Dashboard Linux.sln" --configuration Release
       - name: Run resolver tests
         run: dotnet test Nolvus.Core.Tests/Nolvus.Core.Tests.csproj --configuration Release
-      - name: Run service regressions
-        run: dotnet run --project Nolvus.Services.Tests/Nolvus.Services.Tests.csproj --configuration Release
+      - name: Install Linux Secret Service test dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y dbus-daemon gnome-keyring libsecret-tools
+      - name: Run service regressions in isolated Secret Service session
+        run: bash scripts/run-services-regressions-linux.sh
       - name: Build Linux release archive
         shell: bash
         env:
@@ -106,6 +108,7 @@ jobs:
           grep -Fx 'Nolvus/LICENSE' "$RUNNER_TEMP/nknova-linux-files.txt"
           grep -Fx 'Nolvus/THIRD-PARTY-NOTICES.md' "$RUNNER_TEMP/nknova-linux-files.txt"
           grep -Fx 'Nolvus/docs/INSTALLATION.md' "$RUNNER_TEMP/nknova-linux-files.txt"
+          grep -Fx 'Nolvus/docs/CREDENTIALS.md' "$RUNNER_TEMP/nknova-linux-files.txt"
           mkdir -p "$RUNNER_TEMP/nknova-linux-extracted" "$RUNNER_TEMP/nknova-linux-home"
           tar -xzf "$artifact" -C "$RUNNER_TEMP/nknova-linux-extracted"
           (
@@ -173,6 +176,27 @@ jobs:
         run: dotnet test Nolvus.Core.Tests/Nolvus.Core.Tests.csproj --configuration Release
       - name: Run service regressions
         run: dotnet run --project Nolvus.Services.Tests/Nolvus.Services.Tests.csproj --configuration Release
+      - name: Reject unsafe or mismatched Windows package versions
+        shell: pwsh
+        run: |
+          $output = Join-Path $env:RUNNER_TEMP 'nknova-rejected-version'
+          foreach ($case in @(
+            @{ Version = '../escape'; Expected = 'Invalid package version' },
+            @{ Version = '9.9.9'; Expected = 'does not match Dashboard project version' }
+          )) {
+            $rejected = $false
+            try {
+              & .\scripts\package-windows.ps1 -OutputDirectory $output -Version $case.Version
+            }
+            catch {
+              if ($_.Exception.Message -notmatch $case.Expected) { throw }
+              $rejected = $true
+            }
+            if (-not $rejected) { throw "Unsafe/mismatched version was accepted: $($case.Version)" }
+          }
+          if (Test-Path -LiteralPath $output) {
+            throw 'Rejected versions unexpectedly created an output directory.'
+          }
       - name: Publish, package, validate, and smoke-test extracted Windows UI
         shell: pwsh
         run: .\scripts\package-windows.ps1 -OutputDirectory "$env:RUNNER_TEMP\nknova-windows-dist" -Version "${{ steps.version.outputs.version }}"
@@ -315,14 +339,14 @@ jobs:
 
           ## Included
           - Linux x64 Avalonia dashboard package and Windows x64 dashboard package.
-          - Linux and Windows package, resolver, and URL-redaction tests, plus extracted-application startup smoke tests.
+          - Linux and Windows package, resolver, URL-redaction, and platform credential-store tests, plus extracted-application startup smoke tests.
           - SHA-256 checksum files are attached.
 
           ## Limitations and safety
           - A complete live Nolvus installation was not performed. Use a separate backed-up test installation and do not overwrite a valuable modlist.
           - Automatic upstream self-update is disabled. Install later NKNOVA packages manually.
-          - ImageSharp 3.2.0 contains the vendor-maintained v3 security backports and is built under the original issued assembly-scoped Community license. The source repository is permitted to include this key; security maintenance for ImageSharp 3.x ends on 12 May 2027.
-          - Existing Nolvus/Mega passwords use inherited reversible client-side obfuscation, not secure at-rest protection. No user credentials are included in this package; a compatible OS/user-scoped migration remains needed before stable release.
+          - ImageSharp 3.2.0 contains the vendor-maintained v3 security backports and is built under the original issued assembly-scoped Community license. Security maintenance for ImageSharp 3.x ends on 12 May 2027.
+          - Newly saved credentials use authenticated AES-GCM with Windows user-scoped DPAPI or Linux Secret Service key storage. Legacy values are not decrypted; users must explicitly re-enter and save old passwords. No user credentials are included in this package.
           - .NET 10 runtime is required. Full Nolvus installation support on Windows has not been demonstrated.
           EOF
           printf '\n## Changelog\n\n' >> "$RUNNER_TEMP/preview-notes.md"

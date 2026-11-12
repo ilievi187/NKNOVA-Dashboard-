@@ -16,8 +16,9 @@ namespace Nolvus.Core.Interfaces
         Image ResizeKeepAspectRatio(Image source, int width, int height);
         Image SetImageOpacity(Image Source, float Opacity);
         Image SetImageGradient(Image InputImage);
-        string EncryptString(string value);
-        string DecryptString(string value);
+        string StoreCredential(string value);
+        string RetrieveCredential(string value);
+        void DeleteCredentialReference(string reference);
         Image GetImageFromWebStream(string ImageUrl);
         Image GetImageFromUrl(string ImageUrl);
         byte[] ImageToByteArray(Image Image);

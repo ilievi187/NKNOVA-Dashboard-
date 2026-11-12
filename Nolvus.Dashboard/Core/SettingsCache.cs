@@ -8,5 +8,7 @@ namespace Nolvus.Dashboard.Core
         public static string NexusApiKey { get; set; } = string.Empty;
         public static string NolvusUser { get; set; } = string.Empty;
         public static string NolvusPassword { get; set; } = string.Empty;
+        public static bool NolvusCredentialReentryRequired { get; set; }
+        public static string NolvusCredentialReentryMessage { get; set; } = string.Empty;
     }
 }

@@ -82,8 +82,14 @@ jobs:
             exit 1
           fi
           echo "The base branch has not yet adopted the focused redaction test project."
-      - name: Run URL redaction regression when the focused test project is present
-        if: ${{ hashFiles('Nolvus.Services.Tests/Nolvus.Services.Tests.csproj') != '' }}
+      - name: Install Linux Secret Service test dependencies
+        if: ${{ runner.os == 'Linux' && hashFiles('Nolvus.Services.Tests/Nolvus.Services.Tests.csproj') != '' }}
+        run: sudo apt-get update -qq && sudo apt-get install -y dbus-daemon gnome-keyring libsecret-tools
+      - name: Run Linux service regressions in an isolated Secret Service session
+        if: ${{ runner.os == 'Linux' && hashFiles('Nolvus.Services.Tests/Nolvus.Services.Tests.csproj') != '' }}
+        run: bash scripts/run-services-regressions-linux.sh
+      - name: Run Windows service regressions
+        if: ${{ runner.os == 'Windows' && hashFiles('Nolvus.Services.Tests/Nolvus.Services.Tests.csproj') != '' }}
         run: dotnet run --project Nolvus.Services.Tests/Nolvus.Services.Tests.csproj --configuration Release
       - name: Report that no focused redaction project exists on this commit yet
         if: ${{ hashFiles('Nolvus.Services.Tests/Nolvus.Services.Tests.csproj') == '' }}

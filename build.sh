@@ -131,7 +131,7 @@ for document in README.md CHANGELOG.md THIRD-PARTY-NOTICES.md; do
     cp "$PROJECT_ROOT/$document" "$OUT_DIR/Nolvus/"
 done
 mkdir -p "$OUT_DIR/Nolvus/docs"
-for document in docs/INSTALLATION.md docs/TROUBLESHOOTING.md docs/RELEASING.md; do
+for document in docs/INSTALLATION.md docs/TROUBLESHOOTING.md docs/CREDENTIALS.md docs/RELEASING.md; do
     cp "$PROJECT_ROOT/$document" "$OUT_DIR/Nolvus/docs/"
 done
 

@@ -25,12 +25,12 @@ Only tag a commit already on protected `main` after its pull request and require
 
 Before changing the draft to a public pre-release, a maintainer must verify all of the following:
 
-1. Required Linux, Windows, and security checks passed on the exact tag commit.
+1. Required Linux, Windows, and security checks passed on the exact tag commit. In particular, verify the **aggregate `CodeQL` check reported by the `github-advanced-security` GitHub App** is `success` on that exact commit, not merely the `CodeQL (csharp)` / `CodeQL (actions)` / `CodeQL (rust)` workflow jobs. Confirm that the active repository code-scanning ruleset has no unresolved blocking findings; never dismiss a genuine finding to make a release pass.
 2. Uploaded asset hashes match the CI-generated packages.
 3. No unresolved critical/high findings affect shipped behavior; any finding dismissed as unreachable must be mapped to the actual call graph and reviewed before closure.
 4. The ImageSharp advisories have been fixed with a compatible licensed package or a reachable-code mitigation has been independently reviewed and documented.
 5. A valid approved Six Labors license is available for every direct-reference assembly before building upgraded packages.
-6. Legacy Nolvus/Mega credential storage has either been migrated compatibly to platform/user-scoped protection or its residual risk is explicitly accepted for the preview. Do not describe the existing fixed-key obfuscation as secure storage.
+6. Credential behavior and rollback limits are documented. New Nolvus/Mega/Nexus saves use platform-vault references. v2/v3 AES-GCM values remain read-only compatible, while fixed-key TripleDES Nolvus/Mega values are rejected and require user re-entry; legacy plaintext Nexus keys remain readable until explicitly re-saved. Do not describe unsupported legacy passwords as protected.
 7. A supported real Nolvus test environment has completed applicable installer acceptance tests. Do not modify an ordinary user's game installation to satisfy this gate.
 8. Release notes, known limitations, runtime requirements, and rollback instructions are accurate.
 

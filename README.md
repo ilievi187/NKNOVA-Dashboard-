@@ -23,8 +23,8 @@ NKNOVA is a GPL-3.0-licensed community fork of the Avalonia-based Nolvus Dashboa
 - Redux, Ultimate, Ultra, Graphics-only, ENB, and Community Shaders availability depends on the actual upstream service/API and installed configuration. The preview does not promise all variants are installable.
 - No new, standalone Rust installer or custom one-click installation backend is included.
 - RAM/CPU/download resource-limit controls and interruption recovery are not claimed unless the current UI/backend explicitly enforces them.
-- ImageSharp 3.2.0 is now used under the vendor-issued assembly-scoped Community license (`sixlabors.lic`), with successful Windows/Linux builds and tests. Full real-install acceptance and legacy credential protection remain release blockers; see [license guide](docs/SIXLABORS-LICENSE.md) and [reviewed dependency change](docs/REVIEWED-IMAGESHARP-DEPENDENCY.md).
-- Existing Nolvus/Mega account settings use inherited reversible client-side obfuscation with a built-in key, not secure credential storage. No user credential is bundled, but testers should not rely on it to protect passwords from local access. A backward-compatible OS/user-scoped storage migration is required before a stable release.
+- ImageSharp 3.2.0 is now used under the vendor-issued assembly-scoped Community license (`sixlabors.lic`), with successful Windows/Linux builds and tests. See [license guide](docs/SIXLABORS-LICENSE.md) and [reviewed dependency change](docs/REVIEWED-IMAGESHARP-DEPENDENCY.md).
+- New credential saves use opaque references to Windows Credential Manager entries protected with current-user DPAPI or Linux Secret Service items. Existing v2/v3 AES envelopes remain read-only compatible; legacy fixed-key TripleDES Nolvus/Mega passwords are rejected and require re-entry. Legacy plaintext Nexus keys remain readable until explicitly re-saved. See [Credential storage](docs/CREDENTIALS.md).
 
 ## Downloads
 
@@ -34,7 +34,7 @@ Release assets are x64 framework-dependent packages, with SHA-256 files. Install
 
 ### Linux
 
-1. Install a current .NET 10 x64 runtime, Steam, and the external tools required by the particular Proton workflow you intend to use.
+1. Install a current .NET 10 x64 runtime, Steam, and the external tools required by the particular Proton workflow you intend to use. Credential saving also requires a running/unlocked Secret Service-compatible user keyring (for example GNOME Keyring or a compatible KWallet service).
 2. Extract `NKNOVA-Linux-0.1.0-preview.3.tar.gz` to a user-writable directory, not `/usr` or another protected location.
 3. Run `./Nolvus/NolvusDashboard` from the extracted package.
 4. Review diagnostics and verify the detected game path before starting any installation or repair action.
@@ -54,15 +54,19 @@ Install the .NET 10 SDK. On Linux, from the repository root:
 
 ```bash
 dotnet test "Nolvus Dashboard Linux.sln" --configuration Release
+dotnet test Nolvus.Core.Tests/Nolvus.Core.Tests.csproj --configuration Release
+bash scripts/run-services-regressions-linux.sh
 ./build.sh
 ```
 
-`build.sh` publishes the dashboard only, omits the upstream updater, and refuses to overwrite an existing `~/Desktop/Binaries-<version>.tar.gz` archive.
+The focused Linux services harness uses an isolated D-Bus/GNOME Keyring test home. It requires `dbus-run-session`, `gnome-keyring-daemon`, and `secret-tool` (`libsecret-tools`). `build.sh` publishes the dashboard only, omits the upstream updater, and refuses to overwrite an existing `~/Desktop/Binaries-<version>.tar.gz` archive.
 
 On Windows PowerShell:
 
 ```powershell
 dotnet test 'Nolvus Dashboard Linux.sln' --configuration Release
+dotnet test Nolvus.Core.Tests/Nolvus.Core.Tests.csproj --configuration Release
+dotnet run --project Nolvus.Services.Tests/Nolvus.Services.Tests.csproj --configuration Release
 .\scripts\package-windows.ps1 -OutputDirectory .\artifacts
 ```
 
@@ -70,7 +74,7 @@ The Windows package script validates archive paths and contents, extracts the ge
 
 ## Troubleshooting and recovery
 
-See [Installation](docs/INSTALLATION.md), [Troubleshooting](docs/TROUBLESHOOTING.md), and [Release process](docs/RELEASING.md). Preserve your original package and configuration backups until the new build is known to start. To roll back a failed preview test, exit NKNOVA and remove only the new extracted NKNOVA directory that you created. Do not delete the Steam library, game directory, Nolvus instance, or shared download cache as a generic troubleshooting step.
+See [Installation](docs/INSTALLATION.md), [Troubleshooting](docs/TROUBLESHOOTING.md), [Credential storage](docs/CREDENTIALS.md), and [Release process](docs/RELEASING.md). Preserve your original package and configuration backups until the new build is known to start. To roll back a failed preview test, exit NKNOVA and remove only the new extracted NKNOVA directory that you created. Do not delete the Steam library, game directory, Nolvus instance, or shared download cache as a generic troubleshooting step.
 
 ## Licensing and attribution
 

@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="SixLabors.ImageSharp" Version="3.2.0" />
-    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia" Version="11.3.8" />
     <PackageReference Include="System.Reactive" Version="7.0.0-preview.1" />
   </ItemGroup>
 

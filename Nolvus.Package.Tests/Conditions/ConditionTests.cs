@@ -1,3 +1,5 @@
+using Nolvus.Core.Interfaces;
+using Nolvus.Core.Services;
 using Nolvus.Package.Conditions;
 using Nolvus.Package.Rules;
 
@@ -45,6 +47,7 @@ namespace Nolvus.Tests.Conditions
         [Fact]
         public void RuleLoad_SkipsUnknownConditionTypes()
         {
+            ServiceSingleton.RegisterService<ILogService>(TestEnvironment.Logger);
             var Rule = Rename("a", "b",
                 "<Condition><Type>NoSuchCondition</Type></Condition>",
                 SizeCondition("SkyrimSE.exe", 0, 2, 1));

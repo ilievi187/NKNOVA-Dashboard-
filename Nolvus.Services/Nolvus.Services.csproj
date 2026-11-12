@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Nolvus.Tests" />
+    <InternalsVisibleTo Include="Nolvus.Package.Tests" />
   </ItemGroup>
 
   <ItemGroup>

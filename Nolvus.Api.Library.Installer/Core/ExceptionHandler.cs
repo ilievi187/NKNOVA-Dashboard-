@@ -25,16 +25,24 @@ namespace Vcc.Nolvus.Api.Installer.Core
     {
         public static void ThrowWebApiException(HttpResponseMessage Response)
         {
+            var content = Response.Content.ReadAsStringAsync().Result;
             try
             {
-                var ErrorAsJson = JsonConvert.DeserializeObject<ApiException>(Response.Content.ReadAsStringAsync().Result);
-
-                throw new WebApiException(ErrorAsJson.ExceptionMessage, (int)Response.StatusCode, ErrorAsJson);
+                var ErrorAsJson = JsonConvert.DeserializeObject<ApiException>(content);
+                if (ErrorAsJson != null && !string.IsNullOrEmpty(ErrorAsJson.ExceptionMessage))
+                {
+                    throw new WebApiException(ErrorAsJson.ExceptionMessage, (int)Response.StatusCode, ErrorAsJson);
+                }
+            }
+            catch (WebApiException)
+            {
+                throw;
             }
             catch
             {
-                throw new Exception(Response.Content.ReadAsStringAsync().Result);
             }
+
+            throw new Exception($"[HTTP {(int)Response.StatusCode} {Response.ReasonPhrase}] {content}");
         }
     }
 }

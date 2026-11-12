@@ -35,7 +35,76 @@ namespace Vcc.Nolvus.Api.Installer.Controllers
 
         public async Task<IEnumerable<INolvusVariantDTO>> GetNolvusVariants()
         {
-            return await this._Service.GetPolyMorphic<List<NolvusVariantDTO>>($"{_Api}/getnolvusvariants");
+            try
+            {
+                var upstream = await this._Service.GetPolyMorphic<List<NolvusVariantDTO>>($"{_Api}/getnolvusvariants");
+                if (upstream != null && upstream.Count > 0)
+                {
+                    return upstream;
+                }
+            }
+            catch
+            {
+                // Nolvus Awakening v6 getnolvusvariants endpoint returns 403 Forbidden while in beta.
+                // Fall back to the official built-in variants defined in the v6 package.
+            }
+
+            return GetDefaultNolvusVariants();
+        }
+
+        private static IEnumerable<INolvusVariantDTO> GetDefaultNolvusVariants()
+        {
+            return new List<INolvusVariantDTO>
+            {
+                new NolvusVariantDTO
+                {
+                    Id = "1",
+                    Name = "Redux",
+                    FullName = "Redux (Performance)",
+                    Textures = "1K - 2K",
+                    Trees = "Veydosebrom Regions / Happy Little Trees",
+                    Cities = "Vanilla layout + enhanced assets",
+                    Beta = false,
+                    Display = true,
+                    Note = "Optimized for mid-range systems with lower VRAM requirements."
+                },
+                new NolvusVariantDTO
+                {
+                    Id = "2",
+                    Name = "Ultra",
+                    FullName = "Ultra (Full Graphics)",
+                    Textures = "2K - 4K",
+                    Trees = "Nature of the Wild Lands / Ulvenwald",
+                    Cities = "Full city overhauls + exterior additions",
+                    Beta = false,
+                    Display = true,
+                    Note = "High fidelity visuals with custom LODs and full parallax."
+                },
+                new NolvusVariantDTO
+                {
+                    Id = "3",
+                    Name = "Ultimate",
+                    FullName = "Ultimate (Max Visuals)",
+                    Textures = "4K Parallax",
+                    Trees = "Full 3D Treepine / Lush Flora Overhaul",
+                    Cities = "Complete city & exterior overhaul with maximum density",
+                    Beta = false,
+                    Display = true,
+                    Note = "Demanding preset requiring high-end GPU with 16GB+ VRAM."
+                },
+                new NolvusVariantDTO
+                {
+                    Id = "4",
+                    Name = "Graphics Only",
+                    FullName = "Graphics Only (Visuals + ENB)",
+                    Textures = "2K - 4K",
+                    Trees = "Enhanced Trees & Grass",
+                    Cities = "Visual enhancements without gameplay changes",
+                    Beta = false,
+                    Display = true,
+                    Note = "Vanilla gameplay preserved with modern graphical overhaul and ENB."
+                }
+            };
         }
 
         public async Task<IEnumerable<INolvusGPUDTO>> GetGPUs()

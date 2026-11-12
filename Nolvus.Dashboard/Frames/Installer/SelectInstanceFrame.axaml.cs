@@ -208,9 +208,26 @@ namespace Nolvus.Dashboard.Frames.Installer
                 if (version.Maintenance)
                     throw new InvalidOperationException("Nolvus is under maintenance: " + version.MaintenanceReason);
 
-                var variants = await ApiManager.Service.Installer.GetNolvusVariants();
-                var graphicsOnlyPublished = variants.Any(v =>
-                    string.Equals(v.Name, Strings.GO, StringComparison.Ordinal));
+                // The official Nolvus v6 Awakening package contains the "Graphics Only" variant directly
+                // in InstallPackage.xml conditions. However, the upstream getnolvusvariants endpoint returns 403
+                // on v6 while it remains in beta. We check the upstream endpoint if reachable, but allow Graphics Only
+                // for Awakening as defined in the official package.
+                bool graphicsOnlyPublished = true;
+                try
+                {
+                    var variants = await ApiManager.Service.Installer.GetNolvusVariants();
+                    if (variants != null && variants.Any())
+                    {
+                        graphicsOnlyPublished = variants.Any(v =>
+                            string.Equals(v.Name, Strings.GO, StringComparison.Ordinal));
+                    }
+                }
+                catch
+                {
+                    // If the upstream variant query is blocked (e.g. HTTP 403 on beta v6),
+                    // proceed using the Awakening package's built-in Graphics Only variant.
+                    graphicsOnlyPublished = true;
+                }
                 var enb = NknovaEnbPreset.SelectedItem as ENBs;
                 if (enb is null)
                     throw new InvalidOperationException("Select an ENB preset.");

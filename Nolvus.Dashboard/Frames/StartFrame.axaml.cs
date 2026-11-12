@@ -146,6 +146,16 @@ namespace Nolvus.Dashboard.Frames
                     window?.SetAccountImageVisible(true);
                     if (!await CheckNolvus())
                         return;
+                    try
+                    {
+                        // Upstream's update check also puts the token on the shared client, and later unrestricted
+                        // calls like OptionsCount rely on it. NKNOVA bypasses the updater binary, but makes this call.
+                        await ApiManager.Service.Installer.GetLatestInstaller();
+                    }
+                    catch (Exception ex)
+                    {
+                        ServiceSingleton.Logger.Log("GetLatestInstaller warning: " + ex.Message);
+                    }
                     // NKNOVA is a fork and has no verified update channel yet. Do not query
                     // or launch the upstream updater, which could replace this build.
                     if (!await CheckNexus())
@@ -171,7 +181,7 @@ namespace Nolvus.Dashboard.Frames
                 }
             } catch (Exception ex)
             {
-                ServiceSingleton.Logger.Log(ex.StackTrace);
+                await ServiceSingleton.Dashboard.Error("Error during initialization", ex.Message, ex.StackTrace);
             }
 
             ServiceSingleton.Dashboard.NoStatus();
@@ -367,7 +377,7 @@ namespace Nolvus.Dashboard.Frames
                 ServiceSingleton.Dashboard.Status("Checking instances...");
                 ServiceSingleton.Logger.Log("Checking instances...");
 
-                ServiceSingleton.Instances.Load();
+                await ServiceSingleton.Instances.Load();
 
                 if (!ServiceSingleton.Instances.Empty)
                 {

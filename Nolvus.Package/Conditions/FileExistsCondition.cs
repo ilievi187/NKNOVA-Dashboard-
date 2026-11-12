@@ -15,6 +15,11 @@ namespace Nolvus.Package.Conditions
         /// </summary>
         public int Source { get; set; }
 
+        public override bool IsApplicable()
+        {
+            return true;
+        }
+
         public override void Load(XmlNode Node)
         {
             DataToCompare = Node["DataToCompare"]?.InnerText ?? string.Empty;

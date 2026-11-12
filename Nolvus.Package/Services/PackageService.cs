@@ -135,7 +135,14 @@ namespace Nolvus.Package.Services
         {
             get
             {
-                return Math.Floor(((double)ServiceSingleton.Instances.WorkingInstance.Status.InstalledMods.Count / ModsCount) * 100);
+                if (ModsCount != 0) 
+                {
+                    return Math.Floor(((double)ServiceSingleton.Instances.WorkingInstance.StatusManager.InstalledMods.Count / ModsCount) * 100);
+                }
+                else
+                {
+                    return 0;
+                }
             }
         }
 
@@ -245,6 +252,9 @@ namespace Nolvus.Package.Services
 
                         Progress(string.Format("Loading softwares for version {0}", Storage.SelectSingleNode(VersionKey).InnerText), System.Convert.ToInt16(Math.Round(((double)++Counter / Total * 100))));
                     }
+
+                    // Force Fluorine to install separately of MO2
+                    new FluorineManager().Load(Elements);
 
                     Counter = 1;
 
@@ -357,14 +367,9 @@ namespace Nolvus.Package.Services
 
         private async Task AddModToQueue(InstallableElement Mod)
         {
-            var Tsk = Task.Run(async () => 
-            {                
-                ProgressQueue.Add(await Mod.PrepareProgress());
-                InstallingModsQueue.Add(Mod);
-                ServiceSingleton.Logger.Log("Mod : " + Mod.Name + " added to queue.");
-            });
-
-            await Tsk;
+            ProgressQueue.Add(await Mod.PrepareProgress());
+            InstallingModsQueue.Add(Mod);
+            ServiceSingleton.Logger.Log("Mod : " + Mod.Name + " added to queue.");
         }
 
         private void RemoveModFromQueue(InstallableElement Mod)
@@ -384,7 +389,7 @@ namespace Nolvus.Package.Services
 
         private void SaveInstance(InstallableElement Mod)
         {
-            ServiceSingleton.Instances.WorkingInstance.Status.InstalledMods.Add(Mod.Name);
+            ServiceSingleton.Instances.WorkingInstance.StatusManager.InstalledMods.Add(Mod.Name);
             ServiceSingleton.Instances.Save();
         }
 
@@ -413,8 +418,6 @@ namespace Nolvus.Package.Services
                     await Category.Install(_ErrorHandler.Token);
                 }
 
-                Settings.OnStartInstalling();
-
                 ModsToProcess = ModsToInstall;
 
                 if (Mods != null)
@@ -422,7 +425,9 @@ namespace Nolvus.Package.Services
                     ModsToProcess = Mods.Cast<InstallableElement>().ToList();
                 }
 
-                var Tasks = ModsToProcess.Where(x => !ServiceSingleton.Instances.WorkingInstance.Status.InstalledMods.Any(y => y == x.Name)).OrderBy(i => i.Index).ToList().Select(async Mod =>
+                Settings.OnStartInstalling();
+
+                var Tasks = ModsToProcess.Where(x => !ServiceSingleton.Instances.WorkingInstance.StatusManager.InstalledMods.Any(y => y == x.Name)).OrderBy(i => i.Index).ToList().Select(async Mod =>
                 {
                     await SemaphoreSlim.WaitAsync();
 

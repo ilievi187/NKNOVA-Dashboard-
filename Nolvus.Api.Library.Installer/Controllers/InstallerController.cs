@@ -33,78 +33,13 @@ namespace Vcc.Nolvus.Api.Installer.Controllers
             return await this._Service.GetPolyMorphic<List<NolvusVersionDTO>>($"{_Api}/getnolvusversions");
         }
 
-        public async Task<IEnumerable<INolvusVariantDTO>> GetNolvusVariants()
+        public async Task<IEnumerable<INolvusVariantDTO>> GetNolvusVariants(string GuideId)
         {
-            try
-            {
-                var upstream = await this._Service.GetPolyMorphic<List<NolvusVariantDTO>>($"{_Api}/getnolvusvariants");
-                if (upstream != null && upstream.Count > 0)
-                {
-                    return upstream;
-                }
-            }
-            catch
-            {
-                // Nolvus Awakening v6 getnolvusvariants endpoint returns 403 Forbidden while in beta.
-                // Fall back to the official built-in variants defined in the v6 package.
-            }
+            Dictionary<string, object> Params = new Dictionary<string, object>();
 
-            return GetDefaultNolvusVariants();
-        }
+            Params.Add("GuideId", GuideId);
 
-        private static IEnumerable<INolvusVariantDTO> GetDefaultNolvusVariants()
-        {
-            return new List<INolvusVariantDTO>
-            {
-                new NolvusVariantDTO
-                {
-                    Id = "1",
-                    Name = "Redux",
-                    FullName = "Redux (Performance)",
-                    Textures = "1K - 2K",
-                    Trees = "Veydosebrom Regions / Happy Little Trees",
-                    Cities = "Vanilla layout + enhanced assets",
-                    Beta = false,
-                    Display = true,
-                    Note = "Optimized for mid-range systems with lower VRAM requirements."
-                },
-                new NolvusVariantDTO
-                {
-                    Id = "2",
-                    Name = "Ultra",
-                    FullName = "Ultra (Full Graphics)",
-                    Textures = "2K - 4K",
-                    Trees = "Nature of the Wild Lands / Ulvenwald",
-                    Cities = "Full city overhauls + exterior additions",
-                    Beta = false,
-                    Display = true,
-                    Note = "High fidelity visuals with custom LODs and full parallax."
-                },
-                new NolvusVariantDTO
-                {
-                    Id = "3",
-                    Name = "Ultimate",
-                    FullName = "Ultimate (Max Visuals)",
-                    Textures = "4K Parallax",
-                    Trees = "Full 3D Treepine / Lush Flora Overhaul",
-                    Cities = "Complete city & exterior overhaul with maximum density",
-                    Beta = false,
-                    Display = true,
-                    Note = "Demanding preset requiring high-end GPU with 16GB+ VRAM."
-                },
-                new NolvusVariantDTO
-                {
-                    Id = "4",
-                    Name = "Graphics Only",
-                    FullName = "Graphics Only (Visuals + ENB)",
-                    Textures = "2K - 4K",
-                    Trees = "Enhanced Trees & Grass",
-                    Cities = "Visual enhancements without gameplay changes",
-                    Beta = false,
-                    Display = true,
-                    Note = "Vanilla gameplay preserved with modern graphical overhaul and ENB."
-                }
-            };
+            return await this._Service.GetPolyMorphic<List<NolvusVariantDTO>>($"{_Api}/getnolvusvariants", Params);
         }
 
         public async Task<IEnumerable<INolvusGPUDTO>> GetGPUs()
@@ -293,6 +228,55 @@ namespace Vcc.Nolvus.Api.Installer.Controllers
             Params.Add("CurrentVersion", CurrentVersion);
 
             return await this._Service.GetPolyMorphic<bool>($"{_Api}/latestpackagenewinstall", Params);
+        }
+
+        public async Task<IEnumerable<INolvusOptionDTO>> GetVariantOptions(string Variant, string NolvusVersionId)
+        {
+            Dictionary<string, object> Params = new Dictionary<string, object>();
+            Params.Add("Variant", Variant);
+            Params.Add("NolvusVersionId", NolvusVersionId);
+
+            return await this._Service.GetPolyMorphic<List<NolvusOptionDTO>>($"{_Api}/getvariantoptions", Params);
+        }
+
+        public async Task<IEnumerable<INolvusOptionChoiceDTO>> GetOptionChoices(string Option, string Variant, string NolvusVersionId)
+        {
+            Dictionary<string, object> Params = new Dictionary<string, object>();
+            Params.Add("Option", Option);
+            Params.Add("Variant", Variant);
+            Params.Add("NolvusVersionId", NolvusVersionId);
+
+            return await this._Service.GetPolyMorphic<List<NolvusOptionChoiceDTO>>($"{_Api}/getoptionchoices", Params);
+        }
+
+        public async Task<IEnumerable<INolvusOptionCategoryDTO>> GetOptionCategories(string Variant, string NolvusVersionId)
+        {
+            Dictionary<string, object> Params = new Dictionary<string, object>();
+            Params.Add("Variant", Variant);
+            Params.Add("NolvusVersionId", NolvusVersionId);
+
+            return await this._Service.GetPolyMorphic<List<NolvusOptionCategoryDTO>>($"{_Api}/getoptioncategories", Params);
+        }
+
+        public async Task<IEnumerable<INolvusOptionDTO>> GetOptionsByCategory(string Variant, string Category, string NolvusVersionId)
+        {
+            Dictionary<string, object> Params = new Dictionary<string, object>();
+            Params.Add("Variant", Variant);
+            Params.Add("Category", Category);
+            Params.Add("NolvusVersionId", NolvusVersionId);
+
+            return await this._Service.GetPolyMorphic<List<NolvusOptionDTO>>($"{_Api}/getoptionsbycategory", Params);
+        }
+
+        public async Task<int> OptionsCount(string Variant, string NolvusVersionId)
+        {
+            Dictionary<string, object> Params = new Dictionary<string, object>();
+            Params.Add("Variant", Variant);
+            Params.Add("NolvusVersionId", NolvusVersionId);
+
+            // The server requires a token here, which StartFrame.CheckForUpdates has put on the shared client by now.
+            return await this._Service.GetUnRestricted<int>($"{_Api}/optionscount", Params);
+            //return await this._Service.GetPolyMorphic<int>($"{_Api}/optionscount", Params);
         }
     }
 }

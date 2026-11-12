@@ -377,6 +377,8 @@ public sealed class PathResolverSymlinkCopyRuleTests : IDisposable
     {
         public void Log(string message) { }
         public void LineBreak() { }
+        public void InitializeLog() { }
+        public void ClearLogs() { }
     }
 }
 

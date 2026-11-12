@@ -11,5 +11,7 @@ namespace Nolvus.Core.Interfaces
         int Operator { get; set; }
         bool IsValid();
         bool IsValid(string Value);
+        bool IsValid(string Data, string Value);
+        bool IsApplicable();
     }
 }

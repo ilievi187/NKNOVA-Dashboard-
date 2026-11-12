@@ -21,6 +21,11 @@ namespace Nolvus.Package.Conditions
             ValueToCompare = Node["ValueToCompare"].InnerText;
         }
 
+        public override bool IsApplicable()
+        {
+            return ServiceSingleton.Instances.PropertyExists(DataToCompare);
+        }
+
         public override bool IsValid()
         {            
             string Value = ServiceSingleton.Instances.GetValueFromKey(DataToCompare);              
@@ -55,6 +60,24 @@ namespace Nolvus.Package.Conditions
                     Valid = Value != ValueToCompare;
                     break;
             }
+            return Valid;
+        }
+
+        public override bool IsValid(string Data, string Value)
+        {
+            bool Valid = false;
+
+            switch (this.Operator)
+            {
+                case 0:
+                    Valid = Data == DataToCompare && Value == ValueToCompare;
+                    break;
+
+                case 1:
+                    Valid = Data == DataToCompare && Value != ValueToCompare;
+                    break;
+            }
+
             return Valid;
         }
     }

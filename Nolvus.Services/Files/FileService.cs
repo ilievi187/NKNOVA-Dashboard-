@@ -102,6 +102,22 @@ namespace Nolvus.Services.Files
             }
         }
 
+        public void MoveFiles(string SourcePath, string TargetPath, SearchOption SearchOption = SearchOption.AllDirectories)
+        {
+            if (SearchOption == SearchOption.AllDirectories)
+            {
+                foreach (var DirPath in Directory.GetDirectories(SourcePath, "*", SearchOption.AllDirectories))
+                {
+                    Directory.CreateDirectory(DirPath.Replace(SourcePath, TargetPath));
+                }
+            }
+
+            foreach (var SourceFile in Directory.GetFiles(SourcePath, "*.*", SearchOption))
+            {
+                MoveFile(SourceFile, SourceFile.Replace(SourcePath, TargetPath));
+            }
+        }
+
         public void MoveFile(string SourceFilePath, string TargetFilePath)
         {
             FileInfo SourceFile = new FileInfo(SourceFilePath);
@@ -166,7 +182,7 @@ namespace Nolvus.Services.Files
                     byte[] buff = new byte[1024];
                     int len = s.Read(buff, 0, buff.Length);
                     r = Crc32Algorithm.Compute(buff, 0, len);
-                    uint Counter = 0;
+                    long Counter = len;
                     int Internal = 0;
                     while ((len = s.Read(buff, 0, buff.Length)) > 0)
                     {
@@ -174,7 +190,7 @@ namespace Nolvus.Services.Files
 
                         if (Progress != null)
                         {
-                            Counter = Counter + 1024;
+                            Counter += len;
 
                             int Percent = System.Convert.ToInt16(Math.Round(((double)Counter / s.Length * 100)));
 
@@ -241,9 +257,9 @@ namespace Nolvus.Services.Files
             }
         }
 
-        public bool IsDirectoryEmpty(string Dir)
+        public bool IsDirectoryEmpty(string Dir, SearchOption SearchOption = SearchOption.AllDirectories)
         {
-            return Directory.GetFiles(Dir, "*.*", SearchOption.AllDirectories).Length == 0;            
-        }        
+            return Directory.GetFiles(Dir, "*.*", SearchOption).Length == 0;
+        }
     }
 }

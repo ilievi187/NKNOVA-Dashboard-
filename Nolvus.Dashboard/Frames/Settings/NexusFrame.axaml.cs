@@ -33,6 +33,7 @@ namespace Nolvus.Dashboard.Frames.Settings
             InitializeComponent();
 
             BtnAuthenticate.Click += BtnAuthenticate_Click;
+            BtnValidateKey.Click += BtnValidateKey_Click;
             BtnPrevious.Click += BtnPrevious_Click;
             BtnNext.Click += BtnNext_Click;
 
@@ -198,6 +199,51 @@ namespace Nolvus.Dashboard.Frames.Settings
 
             //WE FINALLY FINISHED NEXUS FRAME AFTER LITERAL DAYS (BLAME CEF)
             ServiceSingleton.Dashboard.LoadFrame<NolvusFrame>();
+        }
+
+        private async void BtnValidateKey_Click(object? sender, RoutedEventArgs e)
+        {
+            var key = TxtBxManualApiKey.Text?.Trim();
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                await SetReturnMessage("Please enter a valid Nexus API key.", true);
+                return;
+            }
+
+            BtnValidateKey.IsEnabled = false;
+            BtnValidateKey.Content = "Checking...";
+            ToggleMessage(false);
+
+            try
+            {
+                bool valid = await Task.Run(() =>
+                {
+                    try
+                    {
+                        ApiManager.Init(key, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.75 Safari/537.36", Path.GetTempPath());
+                        return ApiManager.AccountInfo != null && !string.IsNullOrEmpty(ApiManager.AccountInfo.Name);
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                });
+
+                if (!valid)
+                {
+                    await SetReturnMessage("Invalid Nexus API key or could not connect to Nexus API.", true);
+                    return;
+                }
+
+                SettingsCache.NexusApiKey = key;
+                await SetReturnMessage($"Authentication successful! Account: {ApiManager.AccountInfo.Name}. Click \"Next\" to continue.", false);
+                UpdateNextButtonState();
+            }
+            finally
+            {
+                BtnValidateKey.IsEnabled = true;
+                BtnValidateKey.Content = "Apply Key";
+            }
         }
 
         private async void BtnAuthenticate_Click(object? sender, RoutedEventArgs e)

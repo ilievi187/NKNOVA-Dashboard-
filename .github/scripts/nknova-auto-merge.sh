@@ -29,6 +29,7 @@ required_checks=(
     "Detect Rust sources"
     "CodeQL (actions)"
     "CodeQL (csharp)"
+    "CodeQL" # GitHub code-scanning aggregate: analysis success alone does not clear findings.
     "CodeQL (rust)"
     "Dependency Manifest Gate"
 )
@@ -78,7 +79,30 @@ wait_for_main_workflow() {
     return 1
 }
 
+# Fail closed if the repository's code-scanning alert inventory cannot be read.
+# Aggregate CodeQL success only proves the PR introduced no newly-blocking alert;
+# it does not certify that pre-existing alerts are resolved.
+ensure_no_open_code_scanning_alerts() {
+    local pages open_count
+    if ! pages=$(gh api --paginate --slurp "repos/${repo}/code-scanning/alerts?state=open&per_page=100"); then
+        echo "Cannot read code-scanning alerts; refusing automatic merge."
+        return 1
+    fi
+
+    if ! jq -e 'type == "array" and length > 0 and all(.[]; type == "array" and all(.[]; type == "object" and .state == "open"))' <<<"$pages" >/dev/null; then
+        echo "Unexpected code-scanning response or non-open alert state; refusing automatic merge."
+        return 1
+    fi
+
+    open_count=$(jq '[.[][] | select(.state == "open")] | length' <<<"$pages")
+    if (( open_count > 0 )); then
+        echo "Found ${open_count} unresolved code-scanning alerts; manual security review and merge required."
+        return 1
+    fi
+}
+
 ensure_main_healthy
+ensure_no_open_code_scanning_alerts
 
 prs_json=$(gh pr list --repo "$repo" --state open --base main --limit 100 \
     --json number,createdAt,author,isDraft,baseRefName,headRepository,headRepositoryOwner)
@@ -160,14 +184,16 @@ for number in "${prs[@]}"; do
     checks=$(gh api "repos/${repo}/commits/${head_sha}/check-runs?per_page=100")
     ready=true
     for context in "${required_checks[@]}"; do
-        check_state=$(jq -r --arg name "$context" '
-            ([.check_runs[] | select(.name == $name)] | sort_by(.started_at // .created_at // "") | last // {}) as $check
+        expected_app="github-actions"
+        if [[ "$context" == "CodeQL" ]]; then
+            expected_app="github-advanced-security"
+        fi
+        check_state=$(jq -r --arg name "$context" --arg expected_app "$expected_app" '
+            ([.check_runs[] | select(.name == $name and .app.slug == $expected_app)] | sort_by(.started_at // .created_at // "") | last // {}) as $check
             | if $check.status == "completed" then ($check.conclusion // "") else ($check.status // "missing") end
         ' <<<"$checks")
-        if [[ "$context" == "CodeQL (rust)" && "$check_state" == "skipped" ]]; then
-            echo "CodeQL Rust check is skipped because the successful detection job found no Rust sources."
-            continue
-        fi
+        # The Rust job uses if: always() and reports success when no Rust sources
+        # exist. A skipped Rust check is therefore not proof of a clean scan.
         if [[ "$check_state" != "success" ]]; then
             echo "PR #${number} is waiting for required check '${context}' (state=${check_state})."
             ready=false
@@ -184,13 +210,21 @@ for number in "${prs[@]}"; do
         continue
     fi
 
+    # A new code-scanning alert may have appeared since the initial inventory.
+    # Recheck immediately before the merge decision; fail closed on API errors.
+    # GitHub's protected-branch rules remain the final authoritative gate.
+    if ! ensure_no_open_code_scanning_alerts; then
+        echo "Skipping PR #${number}: code-scanning alerts appeared or could not be rechecked."
+        continue
+    fi
+
     if [[ "$dry_run" == "true" ]]; then
         echo "DRY RUN: PR #${number} is eligible for a squash merge at ${head_sha}; no merge requested."
         continue
     fi
 
-    echo "All required checks passed for trusted owner PR #${number} at ${head_sha}. Requesting a normal squash merge with no admin bypass."
-    if ! gh pr merge "$number" --repo "$repo" --squash; then
+    echo "All required checks passed for trusted owner PR #${number} at ${head_sha}. Requesting a SHA-locked squash merge with no admin bypass."
+    if ! gh pr merge "$number" --repo "$repo" --squash --match-head-commit "$head_sha"; then
         echo "GitHub refused PR #${number}; branch protection or a newer conflict remains. Leaving it open."
         continue
     fi

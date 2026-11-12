@@ -63,6 +63,7 @@
 | Phase C: One-Click Graphics Only Plan (`GraphicsOnlyInstallPlan`) | `9222576` (PR #41) | Resolution bounds, non-empty folder refusal, disjoint paths, symlink rejection, aspect ratios | Completed & Merged |
 | Automated Unit & Integration Tests | `9222576` (PR #41) | 51 passed in `Nolvus.Core.Tests`, 77 passed in `Nolvus.Package.Tests`, 7 passed in services regressions | Completed & Merged |
 | Phase C/D: Avalonia UI Integration for Graphics Only + ENB | `e80d747` (PR #42) | UI preset dropdown, one-click preflight trigger, direct package frame routing, 17/17 CI checks passed | Completed & Merged |
+| Sync Upstream 4.0.2 (`sableeyed/NolvusDashboard`) | `0ec73ab` | Full Awakening v6 & Ascension v5 wizard options, variants GuideId query fix, FluorineManager package integration, 91 passed in `Nolvus.Tests`, 77 passed in `Nolvus.Package.Tests`, 51 passed in `Nolvus.Core.Tests`, 7 passed in service regressions | Completed |
 
 ---
 

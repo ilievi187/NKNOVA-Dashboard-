@@ -11,7 +11,6 @@
                        Grid.Row="0"
                        Text="Supported GPUs"
                        FontSize="20"
-                       FontWeight="SemiBold"
                        Foreground="White"
                        HorizontalAlignment="Left"
                        VerticalAlignment="Center"/>
@@ -50,11 +49,31 @@
                                 Binding="{Binding VRAM}"
                                 Width="*"/>
 
-                            <!-- No icons. Yes/No only -->
-                            <DataGridTextColumn
+                            <DataGridTemplateColumn
                                 Header="Supported"
-                                Binding="{Binding Supported}"
-                                Width="*"/>
+                                Width="*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Panel Margin="12,0"
+                                               HorizontalAlignment="Left"
+                                               VerticalAlignment="Center">
+                                            <Path IsVisible="{Binding Supported}"
+                                                  Data="M 2,8 L 6,12 L 14,4"
+                                                  Width="16" Height="16"
+                                                  Stroke="LimeGreen"
+                                                  StrokeThickness="2.5"
+                                                  StrokeLineCap="Round"
+                                                  StrokeJoin="Round"/>
+                                            <Path IsVisible="{Binding !Supported}"
+                                                  Data="M 3,3 L 13,13 M 13,3 L 3,13"
+                                                  Width="16" Height="16"
+                                                  Stroke="OrangeRed"
+                                                  StrokeThickness="2.5"
+                                                  StrokeLineCap="Round"/>
+                                        </Panel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
 
                         </DataGrid.Columns>
                     </DataGrid>
@@ -73,32 +92,33 @@
                         <TextBlock x:Name="label4"
                                    Grid.Row="0"
                                    Text="List of supported GPUs"
-                                   FontSize="14"
-                                   Foreground="White"/>
+                                   FontSize="16"
+                                   FontWeight="Bold"
+                                   Foreground="#FFA500"/>
 
                         <StackPanel Grid.Row="1" Spacing="6">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <TextBlock Text="Variant" Foreground="White"/>
-                                <TextBlock x:Name="LblVariant" Foreground="#F28F1A"/>
+                                <TextBlock x:Name="LblVariant" Foreground="#FFA500"/>
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <TextBlock Text="Resolution" Foreground="White"/>
-                                <TextBlock x:Name="LblResolution" Foreground="#F28F1A"/>
+                                <TextBlock x:Name="LblResolution" Foreground="#FFA500"/>
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <TextBlock Text="SR Exterior Cities" Foreground="White"/>
-                                <TextBlock x:Name="LblSREX" Foreground="#F28F1A"/>
+                                <TextBlock x:Name="LblSREX" Foreground="#FFA500"/>
                             </StackPanel>
                         </StackPanel>
 
                         <StackPanel Grid.Row="2" Spacing="8">
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Image x:Name="ImgWarning" Width="32" Height="32"/>
+                                <Image x:Name="ImgWarning" Source="avares://NolvusDashboard/Assets/Warning-Message.png" Width="32" Height="32"/>
                                 <TextBlock Text="Warning"
                                            FontSize="16"
-                                           Foreground="#F28F1A"/>
+                                           Foreground="#FFA500"/>
                             </StackPanel>
 
                             <TextBlock x:Name="label5"
@@ -113,14 +133,14 @@
 
                         <StackPanel Grid.Row="3"
                                     Orientation="Horizontal"
-                                    HorizontalAlignment="Right">
+                                    HorizontalAlignment="Center">
                             <Button x:Name="BtnBack"
                                     Content="Back"
                                     MinWidth="90"
                                     Padding="12,6"
                                     Background="#363636"
                                     Foreground="White"
-                                    BorderBrush="White"
+                                    BorderBrush="Gray"
                                     BorderThickness="1"/>
                         </StackPanel>
 

@@ -33,9 +33,13 @@ namespace Vcc.Nolvus.Api.Installer.Controllers
             return await this._Service.GetPolyMorphic<List<NolvusVersionDTO>>($"{_Api}/getnolvusversions");
         }
 
-        public async Task<IEnumerable<INolvusVariantDTO>> GetNolvusVariants()
+        public async Task<IEnumerable<INolvusVariantDTO>> GetNolvusVariants(string GuideId)
         {
-            return await this._Service.GetPolyMorphic<List<NolvusVariantDTO>>($"{_Api}/getnolvusvariants");
+            Dictionary<string, object> Params = new Dictionary<string, object>();
+
+            Params.Add("GuideId", GuideId);
+
+            return await this._Service.GetPolyMorphic<List<NolvusVariantDTO>>($"{_Api}/getnolvusvariants", Params);
         }
 
         public async Task<IEnumerable<INolvusGPUDTO>> GetGPUs()
@@ -224,6 +228,55 @@ namespace Vcc.Nolvus.Api.Installer.Controllers
             Params.Add("CurrentVersion", CurrentVersion);
 
             return await this._Service.GetPolyMorphic<bool>($"{_Api}/latestpackagenewinstall", Params);
+        }
+
+        public async Task<IEnumerable<INolvusOptionDTO>> GetVariantOptions(string Variant, string NolvusVersionId)
+        {
+            Dictionary<string, object> Params = new Dictionary<string, object>();
+            Params.Add("Variant", Variant);
+            Params.Add("NolvusVersionId", NolvusVersionId);
+
+            return await this._Service.GetPolyMorphic<List<NolvusOptionDTO>>($"{_Api}/getvariantoptions", Params);
+        }
+
+        public async Task<IEnumerable<INolvusOptionChoiceDTO>> GetOptionChoices(string Option, string Variant, string NolvusVersionId)
+        {
+            Dictionary<string, object> Params = new Dictionary<string, object>();
+            Params.Add("Option", Option);
+            Params.Add("Variant", Variant);
+            Params.Add("NolvusVersionId", NolvusVersionId);
+
+            return await this._Service.GetPolyMorphic<List<NolvusOptionChoiceDTO>>($"{_Api}/getoptionchoices", Params);
+        }
+
+        public async Task<IEnumerable<INolvusOptionCategoryDTO>> GetOptionCategories(string Variant, string NolvusVersionId)
+        {
+            Dictionary<string, object> Params = new Dictionary<string, object>();
+            Params.Add("Variant", Variant);
+            Params.Add("NolvusVersionId", NolvusVersionId);
+
+            return await this._Service.GetPolyMorphic<List<NolvusOptionCategoryDTO>>($"{_Api}/getoptioncategories", Params);
+        }
+
+        public async Task<IEnumerable<INolvusOptionDTO>> GetOptionsByCategory(string Variant, string Category, string NolvusVersionId)
+        {
+            Dictionary<string, object> Params = new Dictionary<string, object>();
+            Params.Add("Variant", Variant);
+            Params.Add("Category", Category);
+            Params.Add("NolvusVersionId", NolvusVersionId);
+
+            return await this._Service.GetPolyMorphic<List<NolvusOptionDTO>>($"{_Api}/getoptionsbycategory", Params);
+        }
+
+        public async Task<int> OptionsCount(string Variant, string NolvusVersionId)
+        {
+            Dictionary<string, object> Params = new Dictionary<string, object>();
+            Params.Add("Variant", Variant);
+            Params.Add("NolvusVersionId", NolvusVersionId);
+
+            // The server requires a token here, which StartFrame.CheckForUpdates has put on the shared client by now.
+            return await this._Service.GetUnRestricted<int>($"{_Api}/optionscount", Params);
+            //return await this._Service.GetPolyMorphic<int>($"{_Api}/optionscount", Params);
         }
     }
 }

@@ -26,6 +26,7 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
             <Button x:Name="BtnPatreon"
@@ -34,7 +35,7 @@
                     Width="90" Height="40"
                     Margin="5,0"
                     Background="#363636"
-                    BorderBrush="White"
+                    BorderBrush="Gray"
                     Foreground="White"
                     HorizontalContentAlignment="Center"
                     VerticalContentAlignment="Center"/>
@@ -45,7 +46,7 @@
                     Width="90" Height="40"
                     Margin="5,0"
                     Background="#363636"
-                    BorderBrush="White"
+                    BorderBrush="Gray"
                     Foreground="White"
                     HorizontalContentAlignment="Center"
                     VerticalContentAlignment="Center"/>
@@ -56,18 +57,29 @@
                     Width="90" Height="40"
                     Margin="5,0"
                     Background="#363636"
-                    BorderBrush="White"
+                    BorderBrush="Gray"
+                    Foreground="White"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"/>
+
+            <Button x:Name="BtnWiki"
+                    Grid.Column="4"
+                    Content="Wiki"
+                    Width="90" Height="40"
+                    Margin="5,0"
+                    Background="#363636"
+                    BorderBrush="Gray"
                     Foreground="White"
                     HorizontalContentAlignment="Center"
                     VerticalContentAlignment="Center"/>
 
             <Button x:Name="BtnNewInstance"
-                    Grid.Column="4"
+                    Grid.Column="5"
                     Content="Add Instance"
                     Width="114" Height="40"
                     Margin="5,0"
                     Background="#363636"
-                    BorderBrush="White"
+                    BorderBrush="Gray"
                     Foreground="White"
                     HorizontalContentAlignment="Center"
                     VerticalContentAlignment="Center"/>

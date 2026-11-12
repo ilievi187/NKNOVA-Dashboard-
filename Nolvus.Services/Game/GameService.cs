@@ -59,6 +59,7 @@ namespace Nolvus.Services.Game
                 AddSteamRoot(roots, userProfile, ".local", "share", "Steam");
                 AddSteamRoot(roots, userProfile, ".steam", "steam");
                 AddSteamRoot(roots, userProfile, ".steam", "root");
+                AddSteamRoot(roots, userProfile, ".var", "app", "com.valvesoftware.Steam", ".local", "share", "Steam");
                 AddSteamRoot(roots, userProfile, ".var", "app", "com.valvesoftware.Steam", "data", "Steam");
             }
 

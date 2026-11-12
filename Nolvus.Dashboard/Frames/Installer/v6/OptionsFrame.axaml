@@ -14,7 +14,6 @@
                        Text="Additional Options"
                        FontSize="20"
                        Foreground="White"
-                       FontWeight="SemiBold"
                        VerticalAlignment="Center"/>
 
             <!-- Split Grid -->
@@ -38,7 +37,7 @@
                                 <TextBlock Text="Enable nudity" Foreground="White"/>
                                 <ToggleSwitch x:Name="TglNudity"/>
                                 <TextBlock Text="When nudity is enabled all npc's will be nude when undressed."
-                                           Foreground="#F28F1A"
+                                           Foreground="#FFA500"
                                            FontSize="12"/>
                             </StackPanel>
 
@@ -69,7 +68,7 @@
                                             VerticalContentAlignment="Center"
                                             HorizontalContentAlignment="Center"
                                             Background="#363636"
-                                            BorderBrush="White"
+                                            BorderBrush="Gray"
                                             BorderThickness="1"
                                             Foreground="White"
                                             Click="BtnShowAlternateLeveling_Click"
@@ -78,7 +77,7 @@
                                 </Grid>
 
                                 <TextBlock Text="When alternate leveling is disabled, the game uses vanilla skills based leveling. When this option is enabled the player gains xp when killing enemies, exploring the world and completing quests. Skill points are distributed manually by the player in every perk tree when leveling."
-                                        Foreground="#F28F1A"
+                                        Foreground="#FFA500"
                                         TextWrapping="Wrap"
                                         TextTrimming="None"
                                         HorizontalAlignment="Left"
@@ -92,7 +91,7 @@
                                 <TextBlock Text="Alternate Start" Foreground="White" IsVisible="False"/>
                                 <ToggleSwitch x:Name="TglAltStart" IsVisible="False"/>
                                 <TextBlock Text="Start the game in different scenarios rather than Helgen."
-                                           Foreground="#F28F1A"
+                                           Foreground="#FFA500"
                                            IsVisible="False"
                                            FontSize="12"/>
                             </StackPanel>
@@ -114,7 +113,7 @@
                                           Background="#2E2E2E"
                                           Foreground="White"/>
                                 <TextBlock Text="Select between more flashy movesets or more conventional movesets for combat"
-                                           Foreground="#F28F1A"
+                                           Foreground="#FFA500"
                                            FontSize="12"/>
                             </StackPanel>
 
@@ -123,7 +122,7 @@
                                 <TextBlock Text="Stances Perks Tree" Foreground="White" IsVisible="False"/>
                                 <ToggleSwitch x:Name="TglStances" IsEnabled="False" IsVisible="False"/>
                                 <TextBlock Text="Perk system overhaul tied to stance-based combat."
-                                           Foreground="#F28F1A"
+                                           Foreground="#FFA500"
                                            IsVisible="False"
                                            FontSize="12"/>
                             </StackPanel>
@@ -139,9 +138,29 @@
                                                IsVisible="False"
                                                VerticalAlignment="Center"/>
                                 </Grid>
-                                <ToggleSwitch x:Name="TglGore"/>
+                                <Grid ColumnDefinitions="Auto,Auto"
+                                      ColumnSpacing="6">
+                                    <ToggleSwitch x:Name="TglGore"
+                                                  Grid.Column="0"/>
+
+                                    <Button x:Name="BtnShowGore"
+                                            Grid.Column="1"
+                                            Content="?"
+                                            Width="28"
+                                            Height="28"
+                                            Padding="0"
+                                            VerticalAlignment="Center"
+                                            VerticalContentAlignment="Center"
+                                            HorizontalContentAlignment="Center"
+                                            Background="#363636"
+                                            BorderBrush="Gray"
+                                            BorderThickness="1"
+                                            Foreground="White"
+                                            FontWeight="SemiBold"
+                                            Cursor="Hand"/>
+                                </Grid>
                                 <TextBlock Text="Dismember your enemies"
-                                           Foreground="#F28F1A"
+                                           Foreground="#FFA500"
                                            FontSize="12"/>
                             </StackPanel>
 
@@ -156,9 +175,29 @@
                                                IsVisible="False"
                                                VerticalAlignment="Center"/>
                                 </Grid>
-                                <ToggleSwitch x:Name="TglController"/>
+                                <Grid ColumnDefinitions="Auto,Auto"
+                                      ColumnSpacing="6">
+                                    <ToggleSwitch x:Name="TglController"
+                                                  Grid.Column="0"/>
+
+                                    <Button x:Name="BtnShowController"
+                                            Grid.Column="1"
+                                            Content="?"
+                                            Width="28"
+                                            Height="28"
+                                            Padding="0"
+                                            VerticalAlignment="Center"
+                                            VerticalContentAlignment="Center"
+                                            HorizontalContentAlignment="Center"
+                                            Background="#363636"
+                                            BorderBrush="Gray"
+                                            BorderThickness="1"
+                                            Foreground="White"
+                                            FontWeight="SemiBold"
+                                            Cursor="Hand"/>
+                                </Grid>
                                 <TextBlock Text="Enable controller support. You can view the controller layout in the MCM menu when the list is installed. It is not recommended to play with mouse and keyboard when the controller mods are installed."
-                                           Foreground="#F28F1A"
+                                           Foreground="#FFA500"
                                            TextWrapping="Wrap"
                                            TextTrimming="None"
                                            HorizontalAlignment="Left"
@@ -177,6 +216,7 @@
                                     <ComboBox x:Name="DrpUI"
                                               Grid.Column="0"
                                               SelectionChanged="OnUIChanged"
+                                              DisplayMemberBinding="{Binding Value}"
                                               MinWidth="180"
                                               Background="#2E2E2E"
                                               Foreground="White"/>
@@ -190,15 +230,15 @@
                                             VerticalContentAlignment="Center"
                                             HorizontalContentAlignment="Center"
                                             Background="#363636"
-                                            BorderBrush="White"
+                                            BorderBrush="Gray"
                                             BorderThickness="1"
                                             Foreground="White"
                                             FontWeight="SemiBold"
                                             Cursor="Hand"/>
                                 </Grid>
 
-                                <TextBlock Text="Select between Untarnished UI, Edge UI or Oathvein UI"
-                                           Foreground="#F28F1A"
+                                <TextBlock Text="Select your user interface theme"
+                                           Foreground="#FFA500"
                                            FontSize="12"/>
                             </StackPanel>
 
@@ -218,19 +258,20 @@
                           RowSpacing="18">
 
                         <TextBlock Grid.Row="0"
+                                   Text="Info"
+                                   Foreground="#FFA500"
+                                   FontSize="16"
+                                   FontWeight="Bold"/>
+
+                        <TextBlock Grid.Row="1"
                                    Text="Setup some additional options."
                                    Foreground="White"
                                    FontSize="14"/>
 
-                        <TextBlock Grid.Row="1"
-                                   Text="Warning these options can't be changed after installation!!!"
-                                   Foreground="White"
-                                   TextWrapping="Wrap"/>
-
                         <TextBlock x:Name="LblGOWarning"
                                    Grid.Row="2"
                                    Text="WARNING!!! Some options are disabled if you selected the Graphics Only variant."
-                                   Foreground="#F28F1A"
+                                   Foreground="#FFA500"
                                    TextWrapping="Wrap"
                                    IsVisible="False"/>
 
@@ -247,7 +288,7 @@
                                     HorizontalContentAlignment="Center"
                                     VerticalContentAlignment="Center"
                                     Background="#2E2E2E"
-                                    BorderBrush="White"
+                                    BorderBrush="Gray"
                                     Foreground="White"/>
 
                             <Button x:Name="BtnContinue"
@@ -257,8 +298,8 @@
                                     HorizontalContentAlignment="Center"
                                     VerticalContentAlignment="Center"
                                     Background="#2E2E2E"
-                                    BorderBrush="#F28F1A"
-                                    Foreground="#F28F1A"/>
+                                    BorderBrush="Gray"
+                                    Foreground="#FFA500"/>
                         </StackPanel>
 
                     </Grid>

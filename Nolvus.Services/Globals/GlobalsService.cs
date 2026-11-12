@@ -35,8 +35,15 @@ namespace Nolvus.Services.Globals
         {
             get
             {
-                var val = ServiceSingleton.Settings.GetIniValue(MegaSection, MegaAnonymous);
-                return val == null ? true : Convert.ToBoolean(val);
+                try
+                {
+                    var Anonymous = ServiceSingleton.Settings.GetIniValue(MegaSection, MegaAnonymous);
+                    return Anonymous == null ? true : Convert.ToBoolean(Anonymous);
+                }
+                catch
+                {
+                    return true;
+                }
             }
             set => ServiceSingleton.Settings.StoreIniValue(MegaSection, MegaAnonymous, value.ToString().Trim());
         }
@@ -323,7 +330,7 @@ namespace Nolvus.Services.Globals
         {
             var inst = ServiceSingleton.Instances.WorkingInstance;
 
-            if (!int.TryParse(inst.Settings.Width, out var w) || !int.TryParse(inst.Settings.Height, out var h) || w <= 0 || h <= 0)
+            if (!int.TryParse(inst.SettingsManager.Width, out var w) || !int.TryParse(inst.SettingsManager.Height, out var h) || w <= 0 || h <= 0)
                 return new List<string> { "1920x1080" };
 
             const int floorW = 1920;

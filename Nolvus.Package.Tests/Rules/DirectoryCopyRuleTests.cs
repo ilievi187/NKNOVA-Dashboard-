@@ -175,5 +175,9 @@ public sealed class DirectoryCopyRuleTests : IDisposable
         public void Log(string message) { }
 
         public void LineBreak() { }
+
+        public void InitializeLog() { }
+
+        public void ClearLogs() { }
     }
 }

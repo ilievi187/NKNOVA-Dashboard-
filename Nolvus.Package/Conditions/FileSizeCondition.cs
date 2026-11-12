@@ -22,6 +22,11 @@ namespace Nolvus.Package.Conditions
                 : -1;
         }
 
+        public override bool IsApplicable()
+        {
+            return true;
+        }
+
         public override bool IsValid(string GamePath, string InstallDir)
         {
             if (Source is < 0 or > 1 || Operator is < 0 or > 3)

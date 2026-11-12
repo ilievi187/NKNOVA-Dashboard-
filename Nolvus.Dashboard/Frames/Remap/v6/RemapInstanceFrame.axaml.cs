@@ -32,20 +32,21 @@ namespace Nolvus.Dashboard.Frames.Remap.v6
 
         protected override async Task OnLoadedAsync()
         {
-            LblInstance.Text  = string.Format("{0} - {1} v{2}{3}", ServiceSingleton.Instances.WorkingInstance.Name, ServiceSingleton.Instances.WorkingInstance.Performance.Variant, ServiceSingleton.Instances.WorkingInstance.Version, ServiceSingleton.Instances.WorkingInstance.Tag != string.Empty ? string.Format(" - ({0})", ServiceSingleton.Instances.WorkingInstance.Tag) : string.Empty);
-            LblCurrentInstallPath.Text = ServiceSingleton.Instances.WorkingInstance.InstallDir;
+            LblInstance.Text = ServiceSingleton.Instances.WorkingInstance.FullName;
+            LblCurrentInstallPath.Text = ServiceSingleton.Instances.WorkingInstance.SettingsManager.InstallDir;
         }
 
         private void ModifyMO2Executables(string CurrentInstallPath, string NewInstallPath)
         {
-            var Ini = Path.Combine(NewInstallPath, "MODS", "ModOrganizer.ini");
+            // Fluorine's ini in MODS, and the one plain MO2 reads next to ModOrganizer.exe.
+            foreach (var Ini in new[] { Path.Combine(NewInstallPath, "MODS", "ModOrganizer.ini"), Path.Combine(NewInstallPath, "MO2", "ModOrganizer.ini") })
+            {
+                if (!File.Exists(Ini))
+                {
+                    ServiceSingleton.Logger.Log($"Remap : no ModOrganizer.ini at {Ini}, nothing to rewrite");
+                    continue;
+                }
 
-            if (!File.Exists(Ini))
-            {
-                ServiceSingleton.Logger.Log($"Remap : no ModOrganizer.ini at {Ini}, nothing to rewrite");
-            }
-            else
-            {
                 var OldWine = ModOrganizer.ToWineIniPath(CurrentInstallPath);
                 var NewWine = ModOrganizer.ToWineIniPath(NewInstallPath);
 
@@ -72,7 +73,7 @@ namespace Nolvus.Dashboard.Frames.Remap.v6
 
         private async Task Remap()
         {
-            var CurrentInstallPath = ServiceSingleton.Instances.WorkingInstance.InstallDir;
+            var CurrentInstallPath = ServiceSingleton.Instances.WorkingInstance.SettingsManager.InstallDir;
             var NewInstallPath = TxtBxInstancePath.Text;
             var StockGamePath = Path.Combine(NewInstallPath, "STOCK GAME");
             
@@ -125,8 +126,8 @@ namespace Nolvus.Dashboard.Frames.Remap.v6
 
                 ModifyMO2Executables(CurrentInstallPath, NewInstallPath);
 
-                ServiceSingleton.Instances.WorkingInstance.InstallDir = NewInstallPath;
-                ServiceSingleton.Instances.WorkingInstance.StockGame = StockGamePath;
+                ServiceSingleton.Instances.WorkingInstance.SettingsManager.InstallDir = NewInstallPath;
+                ServiceSingleton.Instances.WorkingInstance.SettingsManager.StockGame = StockGamePath;
 
                 ServiceSingleton.Instances.Save();
 
@@ -151,7 +152,14 @@ namespace Nolvus.Dashboard.Frames.Remap.v6
             var folder = result[0];
             var folderPath = folder.Path.LocalPath;
 
-            if (ServiceSingleton.Files.IsDirectoryEmpty(folderPath))
+            var current = Path.TrimEndingDirectorySeparator(Path.GetFullPath(ServiceSingleton.Instances.WorkingInstance.SettingsManager.InstallDir));
+            var chosen = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folderPath));
+
+            if (chosen == current || chosen.StartsWith(current + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            {
+                await NolvusMessageBox.Show(owner, "Invalid Installation Directory", "The new location can't be inside your current instance. Please select a directory outside it.", MessageBoxType.Error);
+            }
+            else if (ServiceSingleton.Files.IsDirectoryEmpty(folderPath))
             {
                 TxtBxInstancePath.Text = folderPath;
             }
@@ -170,34 +178,47 @@ namespace Nolvus.Dashboard.Frames.Remap.v6
         private async void BtnRemap_Click(object? sender, RoutedEventArgs e)
         {
             var owner = TopLevel.GetTopLevel(this) as Window;
-            if (TxtBxInstancePath.Text.Trim() != string.Empty)
+
+            if (!ModOrganizer.IsRunning)
             {
-                try
+                if (TxtBxInstancePath.Text.Trim() != string.Empty)
                 {
                     try
                     {
-                        DisableButtons();
-                        ServiceSingleton.Dashboard.DisableSettings();
+                        try
+                        {
+                            DisableButtons();
 
-                        await Remap();
+                            ServiceSingleton.Dashboard.DisableSettings();
 
-                        ServiceSingleton.Instances.UnloadWorkingIntance();
-                        ServiceSingleton.Dashboard.LoadFrame<InstancesFrame>();
+                            await Remap();
+
+                            ServiceSingleton.Instances.UnloadWorkingIntance();
+                            ServiceSingleton.Dashboard.LoadFrame<InstancesFrame>();
+                        }
+                        finally
+                        {
+                            ServiceSingleton.Dashboard.EnableSettings();
+                            ServiceSingleton.Dashboard.NoStatus();
+                            ServiceSingleton.Dashboard.ProgressCompleted();
+                            ServiceSingleton.Dashboard.ClearInfo();
+                        }
                     }
-                    finally
+                    catch (Exception ex)
                     {
-                        ServiceSingleton.Dashboard.EnableSettings();
-                        ServiceSingleton.Dashboard.NoStatus();
-                        ServiceSingleton.Dashboard.ProgressCompleted();
-                        ServiceSingleton.Dashboard.ClearInfo();
+                        EnableButtons();
+
+                        await NolvusMessageBox.Show(owner, "Error", string.Format("Error occured with message : {0}", ex.Message), MessageBoxType.Error);
                     }
                 }
-                catch (Exception ex)
+                else
                 {
-                    EnableButtons();
-
-                    await NolvusMessageBox.Show(owner, "Error", string.Format("Error occured with message : {0}", ex.Message), MessageBoxType.Error);
+                    await NolvusMessageBox.Show(owner, "Invalid Installation Directory.", "The new installation path must not be empty!", MessageBoxType.Error);
                 }
+            }
+            else
+            {
+                await NolvusMessageBox.Show(owner, "Mod Organizer 2", "An instance of Mod Organizer 2 is running! Please close it first.", MessageBoxType.Error);
             }
         }
     }

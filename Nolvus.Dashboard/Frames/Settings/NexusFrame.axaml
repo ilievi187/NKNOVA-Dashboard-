@@ -10,8 +10,7 @@
     <StackPanel Grid.Row="0" Margin="24,24,24,12" Spacing="8">
       <TextBlock Text="Nexus Authentication" 
                  FontSize="32" 
-                 Foreground="#FFF"
-                 FontWeight="SemiBold"/>
+                 Foreground="#FFF"/>
 
       <StackPanel Orientation="Horizontal" Spacing="4">
         <TextBlock Text="Click the button below to authenticate using Nexus SSO."
@@ -23,7 +22,7 @@
                    FontSize="16"/>
 
         <TextBlock Text="here"
-                   Foreground="#F28F1A"
+                   Foreground="#FFA500"
                    Classes="link"
                    Cursor="Hand"
                    PointerPressed="OpenNexusInfo"
@@ -35,17 +34,46 @@
       </StackPanel>
     </StackPanel>
 
-    <!-- MAIN AUTH BUTTON -->
-    <StackPanel Grid.Row="1" HorizontalAlignment="Left" Spacing="16">
+    <!-- MAIN AUTH BUTTON & MANUAL KEY INPUT -->
+    <StackPanel Grid.Row="1" HorizontalAlignment="Left" Spacing="16" Margin="24,0,24,0">
 
       <Button x:Name="BtnAuthenticate"
               Content="Nexus SSO Authentication"
               FontSize="20"
               MinWidth="260"
-              Margin="20,0,0,0"
               HorizontalContentAlignment="Center"
               VerticalContentAlignment="Center"
+              BorderBrush="Gray"
               Padding="12" />
+
+      <TextBlock Text="— OR ENTER API KEY MANUALLY —"
+                 Foreground="#888888"
+                 FontWeight="Bold"
+                 FontSize="12"
+                 Margin="0,8,0,0"/>
+
+      <TextBlock Text="If SSO or the browser is blocked by Cloudflare, generate a Personal API Key at nexusmods.com/users/myaccount?tab=api and paste it below:"
+                 Foreground="#CCCCCC"
+                 FontSize="13"
+                 MaxWidth="700"
+                 TextWrapping="Wrap"/>
+
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBox x:Name="TxtBxManualApiKey"
+                 Watermark="Paste Nexus Personal API Key here..."
+                 PasswordChar="*"
+                 Width="460"
+                 Background="#2E2E2E"
+                 Foreground="White"
+                 BorderBrush="#444444"/>
+        <Button x:Name="BtnValidateKey"
+                Content="Apply Key"
+                Background="#F28F1A"
+                Foreground="#111111"
+                FontWeight="Bold"
+                Padding="16,8"
+                VerticalAlignment="Center"/>
+      </StackPanel>
 
       <!-- MESSAGE PANEL -->
       <Border x:Name="PnlMessage"
@@ -55,7 +83,7 @@
               IsVisible="False"
               Width="872"
               MaxWidth="872"
-              Margin="20,12,0,0">
+              Margin="0,12,0,0">
         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
           <Image x:Name="PicBox"
                  Width="24" Height="24"
@@ -82,7 +110,7 @@
               HorizontalContentAlignment="Center"
               VerticalContentAlignment="Center"
               Background="#2E2E2E"
-              BorderBrush="White"
+              BorderBrush="Gray"
               Foreground="White"
               MinWidth="90"/>
 
@@ -91,8 +119,8 @@
               HorizontalContentAlignment="Center"
               VerticalContentAlignment="Center"
               Background="#2E2E2E"
-              BorderBrush="#F28F1A"
-              Foreground="#F28F1A"
+              BorderBrush="Gray"
+              Foreground="#FFA500"
               MinWidth="90"/>
 
     </StackPanel>

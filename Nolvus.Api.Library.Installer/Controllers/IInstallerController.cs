@@ -12,7 +12,7 @@ namespace Vcc.Nolvus.Api.Installer.Controllers
     {        
         string LoggedUser { get; }
         Task<IEnumerable<INolvusVersionDTO>> GetNolvusVersions();
-        Task<IEnumerable<INolvusVariantDTO>> GetNolvusVariants();
+        Task<IEnumerable<INolvusVariantDTO>> GetNolvusVariants(string GuideId);
         Task<IEnumerable<INolvusGPUDTO>> GetGPUs();
         Task<IEnumerable<INolvusVariantRequirementDTO>> GetNolvusVariantMinimumRequirements(string VariantId);
         Task<IEnumerable<INolvusVariantRequirementDTO>> GetNolvusVariantRecommendedRequirements(string VariantId);
@@ -36,5 +36,10 @@ namespace Vcc.Nolvus.Api.Installer.Controllers
         Task<IGamePackageDTO> GetLatestGamePackage();
         Task<bool> LatestPackageRequireNewGame(string GuideId, string CurrentVersion);
         Task<bool> LatestPackageRequireReInstall(string GuideId, string CurrentVersion);
+        Task<IEnumerable<INolvusOptionDTO>> GetVariantOptions(string Variant, string NolvusVersionId);
+        Task<IEnumerable<INolvusOptionChoiceDTO>> GetOptionChoices(string Option, string Variant, string NolvusVersionId);
+        Task<IEnumerable<INolvusOptionCategoryDTO>> GetOptionCategories(string Variant, string NolvusVersionId);
+        Task<IEnumerable<INolvusOptionDTO>> GetOptionsByCategory(string Variant, string Category, string NolvusVersionId);
+        Task<int> OptionsCount(string Variant, string NolvusVersionId);
     }
 }

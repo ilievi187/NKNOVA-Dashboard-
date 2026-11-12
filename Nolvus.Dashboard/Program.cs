@@ -11,6 +11,7 @@ using Nolvus.Services.Game;
 using Nolvus.Services.Files;
 using Nolvus.Services.Checker;
 using Nolvus.Services.ENB;
+using Nolvus.Services.Options;
 using Nolvus.Package.Services;
 using Nolvus.Instance.Services;
 using System.Diagnostics;
@@ -38,7 +39,9 @@ internal static class Program
         if (_cefCachePath != null)
             return;
 
-        _cefCachePath = Path.Combine(Path.GetTempPath(), "Nolvus_Cef");
+        _cefCachePath = ServiceSingleton.Folders.WebCacheDirectory;
+
+        Directory.CreateDirectory(_cefCachePath);
 
         AppDomain.CurrentDomain.ProcessExit += (_, __) => CleanupCef();
 
@@ -109,7 +112,11 @@ internal static class Program
 
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         
+        ServiceSingleton.RegisterService<IFolderService>(new FolderService());
         ServiceSingleton.RegisterService<ILogService>(new LogService());
+
+        ServiceSingleton.Logger.InitializeLog();
+
         ServiceSingleton.Logger.Log("***Nolvus Dashboard Initialization***");
         ServiceSingleton.Logger.Log("Starting new session : " + DateTime.Now.ToLongDateString() + " " + DateTime.Now.ToLongTimeString());
         ServiceSingleton.Logger.Log("Architecture : " + (Environment.Is64BitProcess ? "x64" : "x86"));
@@ -118,7 +125,6 @@ internal static class Program
 
         ServiceSingleton.RegisterService<IGlobalsService>(new GlobalsService());
         ServiceSingleton.RegisterService<ISettingsService>(new SettingsService());
-        ServiceSingleton.RegisterService<IFolderService>(new FolderService());            
         ServiceSingleton.RegisterService<IInstanceService>(new InstanceService());
         ServiceSingleton.RegisterService<IPackageService>(PackageService);            
         ServiceSingleton.RegisterService<ILibService>(new LibService());
@@ -128,6 +134,7 @@ internal static class Program
         ServiceSingleton.RegisterService<IReportService>(new ReportService());
         ServiceSingleton.RegisterService<ICheckerService>(new CheckerService());
         ServiceSingleton.RegisterService<IENBService>(new ENBService());
+        ServiceSingleton.RegisterService<IOptionService>(new OptionService());
 
         QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
         QuestPDF.Settings.FontDiscoveryPaths.Clear();

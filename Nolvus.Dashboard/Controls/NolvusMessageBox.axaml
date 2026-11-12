@@ -3,7 +3,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     x:Class="Nolvus.Dashboard.Controls.NolvusMessageBox"
     Width="460"
-    Height="220"
+    MinHeight="220"
+    SizeToContent="Height"
     CanResize="False"
     SystemDecorations="None"
     Background="#363636"
@@ -22,8 +23,7 @@
       <TextBlock x:Name="LblTitle"
                  Grid.Column="1"
                  FontSize="20"
-                 Foreground="#F28F1A"
-                 FontWeight="SemiBold"
+                 Foreground="#FFA500"
                  Text="Title"/>
 
       <!-- Message -->
@@ -37,24 +37,27 @@
 
       <!-- Buttons -->
       <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal"
-                  HorizontalAlignment="Right" Spacing="8">
+                  HorizontalAlignment="Right" Spacing="8" Margin="0,0,4,4">
 
         <Button x:Name="BtnYes"
                 Content="Yes"
                 HorizontalContentAlignment="Center"
                 VerticalContentAlignment="Center"
+                BorderBrush="Gray"
                 MinWidth="90"/>
 
         <Button x:Name="BtnNo"
                 Content="No"
                 HorizontalContentAlignment="Center"
                 VerticalContentAlignment="Center"
+                BorderBrush="Gray"
                 MinWidth="90"/>
 
         <Button x:Name="BtnOK"
                 Content="OK"
                 HorizontalContentAlignment="Center"
                 VerticalContentAlignment="Center"
+                BorderBrush="Gray"
                 MinWidth="90"/>
       </StackPanel>
 

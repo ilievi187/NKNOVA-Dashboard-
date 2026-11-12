@@ -5,7 +5,9 @@ using Avalonia.Platform;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
+using Nolvus.Core.Events;
 using Nolvus.Core.Interfaces;
 using Nolvus.Core.Frames;
 using Nolvus.Core.Enums;
@@ -26,6 +28,7 @@ using Avalonia.Interactivity;
 using Nolvus.Core.Utils;
 using Avalonia.Platform.Storage;
 using Nolvus.Dashboard.Frames.Remap.v6;
+using Nolvus.Dashboard.Frames.Manager.Options;
 
 namespace Nolvus.Dashboard.Controls
 {
@@ -77,7 +80,7 @@ namespace Nolvus.Dashboard.Controls
             _instance = instance;
 
             LblInstanceName.Text = _instance.Tag == string.Empty ? _instance.Name : string.Format("{0} - {1}", _instance.Name, _instance.Tag);
-            LblVersion.Text = $"{_instance.Performance.Variant} v{_instance.Version}";
+            LblVersion.Text = $"{_instance.SettingsManager.Variant} v{_instance.Version}";
             LblDesc.Text = _instance.Description;
 
             if (await _instance.IsBeta())
@@ -155,10 +158,12 @@ namespace Nolvus.Dashboard.Controls
             try
             {
                 // An instance installed with Mod Organizer 2 still has its ini under MO2/.
-                ModOrganizer.EnsureInstanceIni(_instance.InstallDir);
+                ModOrganizer.EnsureInstanceIni(_instance.SettingsManager.InstallDir);
 
                 // Fluorine opens whatever CurrentInstance names, so point it at this one first.
-                ModOrganizer.SelectInstance(_instance.InstallDir);
+                ModOrganizer.SelectInstance(_instance.SettingsManager.InstallDir);
+
+                Fluorine.InstallPlugins(_instance.SettingsManager.InstallDir);
 
                 var Manager = Fluorine.Start();
 
@@ -194,18 +199,11 @@ namespace Nolvus.Dashboard.Controls
 
             try
             {
-                await Fluorine.Install(
-                    (_, p) =>
-                    {
-                        ServiceSingleton.Dashboard.Status($"Downloading Fluorine Manager ({p.BytesReceivedAsString} / {p.TotalBytesToReceiveAsString} MB)");
-                        ServiceSingleton.Dashboard.Progress(p.ProgressPercentage);
-                    },
-                    (_, p) =>
-                    {
-                        ServiceSingleton.Dashboard.Status($"Extracting Fluorine Manager ({p.ProgressPercentage}%)");
-                        ServiceSingleton.Dashboard.Progress(p.ProgressPercentage);
-                    },
-                    () =>
+                var Manager = new FluorineManager();
+
+                var Installing = Manager.Install(CancellationToken.None, new ModInstallSettings
+                {
+                    Browser = () =>
                     {
                         return Dispatcher.UIThread.Invoke(() =>
                         {
@@ -213,7 +211,18 @@ namespace Nolvus.Dashboard.Controls
                             Win.Show();
                             return (IBrowserInstance)Win;
                         });
-                    });
+                    }
+                });
+
+                while (!Installing.IsCompleted)
+                {
+                    ServiceSingleton.Dashboard.Status($"{Manager.Name} : {Manager.Progress.Status}");
+                    ServiceSingleton.Dashboard.Progress(Manager.Progress.PercentDone);
+
+                    await Task.WhenAny(Installing, Task.Delay(ServiceSingleton.Settings.RefreshInterval));
+                }
+
+                await Installing;
 
                 return true;
             }
@@ -254,60 +263,74 @@ namespace Nolvus.Dashboard.Controls
             BtnView.ContextMenu.Open();
         }
 
+        private const double MenuIconSize = 12;
+
+        private static Image MenuIcon(string Name)
+        {
+            using var Asset = AssetLoader.Open(new Uri($"avares://NolvusDashboard/Assets/InstanceMenu/{Name}.png"));
+
+            return new Image { Source = new Bitmap(Asset), Width = MenuIconSize, Height = MenuIconSize };
+        }
+
         private void SetupContextMenu()
         {
             var menu = new ContextMenu();
 
             // Instance
-            var miInstance = new MenuItem { Header = "Instance" };
+            var miInstance = new MenuItem { Header = "Instance", Icon = MenuIcon("BrItmMods") };
             miInstance.Click += (_, __) => BrItmMods_Click();
             menu.Items.Add(miInstance);
 
             // Add Desktop Shortcut
-            var miShortcut = new MenuItem { Header = "Add Desktop Shortcut" };
+            var miShortcut = new MenuItem { Header = "Add Desktop Shortcut", Icon = MenuIcon("BrItmShortCut") };
             miShortcut.Click += (_, __) => BrItmShortCut_Click();
             menu.Items.Add(miShortcut);
             
             menu.Items.Add(new Separator());
 
             // Report to PDF
-            var miReport = new MenuItem { Header = "Report to PDF" };
+            var miReport = new MenuItem { Header = "Report to PDF", Icon = MenuIcon("BrItmReport") };
             miReport.Click += (_, __) => BrItmReport_Click();
             menu.Items.Add(miReport);
 
             menu.Items.Add(new Separator());
 
             // Keybinds
-            var miKeybinds = new MenuItem { Header = "Keybinds" };
+            var miKeybinds = new MenuItem { Header = "Keybinds", Icon = MenuIcon("BrItmKeyBinds") };
             miKeybinds.Click += (_, __) => BrItmKeyBinds_Click();
             menu.Items.Add(miKeybinds);
 
             menu.Items.Add(new Separator());
 
             // User Manual
-            var miManual = new MenuItem { Header = "User Manual" };
+            var miManual = new MenuItem { Header = "User Manual", Icon = MenuIcon("BrItmManual") };
             miManual.Click += (_, __) => BrItmManual_Click();
             menu.Items.Add(miManual);
 
             menu.Items.Add(new Separator());
 
             // ENB Manager
-            var miEnbManager = new MenuItem { Header = "Enb Manager" };
+            var miEnbManager = new MenuItem { Header = "Enb Manager", Icon = MenuIcon("BrItmENBManager") };
             miEnbManager.Click += (_, __) => BrItmENBManager_Click();
             menu.Items.Add(miEnbManager);
+
+            // Options Manager
+            var miOptionManager = new MenuItem { Header = "Options Manager", Icon = MenuIcon("BrItmOptionManager") };
+            miOptionManager.Click += BrItmOptionManager_Click;
+            menu.Items.Add(miOptionManager);
+
+            menu.Items.Add(new Separator());
+
+            var miRemap = new MenuItem { Header = "Remap Instance", Icon = MenuIcon("BrItmRemap") };
+            miRemap.Click += (_, __) => BrItmRemap_Click();
+            menu.Items.Add(miRemap);
 
             menu.Items.Add(new Separator());
 
             // Delete Instance
-            var miDelete = new MenuItem { Header = "Delete Instance" };
+            var miDelete = new MenuItem { Header = "Delete Instance", Icon = MenuIcon("BrItmDelete") };
             miDelete.Click += (_, __) => BrItmDelete_Click();
             menu.Items.Add(miDelete);
-
-            menu.Items.Add(new Separator());
-
-            var miRemap = new MenuItem { Header = "Remap Instance" };
-            miRemap.Click += (_, __) => BrItmRemap_Click();
-            menu.Items.Add(miRemap);
 
             BtnView.ContextMenu = menu;
         }
@@ -343,7 +366,7 @@ namespace Nolvus.Dashboard.Controls
                         await ServiceSingleton.SoftwareProvider.ModOrganizer2.GetModsMetaData(),
                         await ServiceSingleton.Packages.GetModsMetaData(),
                         s => dashboard.Status(s)),
-                    LoadImageSharpFromAsset("avares://NolvusDashboard/Assets/background-nolvus.jpg"),
+                    LoadTextFromAsset("avares://NolvusDashboard/Assets/background-nolvus.svg"),
                     (s, p) =>
                     {
                         dashboard.Status($"{s} ({p}%)");
@@ -434,7 +457,7 @@ namespace Nolvus.Dashboard.Controls
                 // --instance opens this instance directly, so the shortcut is not at the mercy of
                 // whichever instance Fluorine happened to have selected last. Fluorine is a native
                 // binary, so there is no wine involved.
-                var ModsDir = Path.Combine(_instance.InstallDir, "MODS");
+                var ModsDir = Path.Combine(_instance.SettingsManager.InstallDir, "MODS");
                 var Exec = $"\"{Fluorine.Executable}\" --instance \"{ModsDir}\"";
 
                 var name = _instance.Name;
@@ -489,11 +512,35 @@ namespace Nolvus.Dashboard.Controls
             }
         }
 
-        private SixLabors.ImageSharp.Image LoadImageSharpFromAsset(string assetPath)
+        private async void BrItmOptionManager_Click(object? sender, RoutedEventArgs e)
+        {
+            var window = TopLevel.GetTopLevel(this) as Window;
+            if (!ModOrganizer.IsRunning && !Fluorine.IsRunning)
+            {
+                switch (_instance.Name)
+                {
+                    case Strings.NolvusAscension:
+                        await NolvusMessageBox.Show(window, "Options Manager", string.Format("This feature is not available for {0}.", _instance.Name), MessageBoxType.Info);
+                        break;
+                    
+                    case Strings.NolvusAwakening:
+                        ServiceSingleton.Instances.WorkingInstance = _instance;
+                        await ServiceSingleton.Dashboard.LoadFrameAsync<PackageFrame>(new FrameParameters(new FrameParameter() { Key = "Mode", Value = InstanceMode.Options }));
+                        break;
+                }
+            }
+            else
+            {
+                await NolvusMessageBox.Show(window, "Mod Organizer 2", "An instance of Mod Organizer 2 or Fluorine is running! Close it first.", MessageBoxType.Error);
+            }
+        }
+
+        private string LoadTextFromAsset(string assetPath)
         {
             var uri = new Uri(assetPath);
             using var stream = Avalonia.Platform.AssetLoader.Open(uri);
-            return SixLabors.ImageSharp.Image.Load(stream);
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
         }
 
         private void CreateDesktopShortcut(string name, string execPath, string comment, string path, string iconPath = "")

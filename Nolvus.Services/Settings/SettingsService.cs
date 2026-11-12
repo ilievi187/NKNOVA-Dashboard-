@@ -30,9 +30,28 @@ namespace Nolvus.Services.Settings
         public const string DevSection = "Dev";
         public const string DebugEnabled = "Debug";
 
+        public static string DefaultIniFilePath
+        {
+            get
+            {
+                var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                if (!string.IsNullOrEmpty(baseDir))
+                {
+                    var basePath = Path.Combine(baseDir, IniFile);
+                    if (File.Exists(basePath))
+                        return basePath;
+                }
+
+                if (File.Exists(IniFile))
+                    return Path.GetFullPath(IniFile);
+
+                return !string.IsNullOrEmpty(baseDir) ? Path.Combine(baseDir, IniFile) : IniFile;
+            }
+        }
+
         public void StoreIniValue(string Section, string Parameter, string Value)
         {
-            UpdateIniFileAtomically(IniFile, data => data[Section][Parameter] = Value);
+            UpdateIniFileAtomically(DefaultIniFilePath, data => data[Section][Parameter] = Value);
         }
 
         public static void UpdateIniFileAtomically(string filePath, Action<IniData> update)
@@ -190,7 +209,8 @@ namespace Nolvus.Services.Settings
         {
             var Parser = new FileIniDataParser();
 
-            IniData Data = Parser.ReadFile(IniFile);
+            string path = DefaultIniFilePath;
+            IniData Data = File.Exists(path) ? Parser.ReadFile(path) : new IniData();
 
             return Data[Section][Parameter];
         }
@@ -199,7 +219,7 @@ namespace Nolvus.Services.Settings
         {
             var Parser = new FileIniDataParser();
 
-            IniData Data = Parser.ReadFile(File);
+            IniData Data = System.IO.File.Exists(File) ? Parser.ReadFile(File) : new IniData();
 
             return Data[Section][Parameter];
         }
@@ -213,7 +233,8 @@ namespace Nolvus.Services.Settings
         {
             var Parser = new FileIniDataParser();
 
-            IniData Data = Parser.ReadFile(IniFile);
+            string path = DefaultIniFilePath;
+            IniData Data = File.Exists(path) ? Parser.ReadFile(path) : new IniData();
 
             var _Section = Data.Sections.Where(x => x.SectionName == Section).FirstOrDefault();
 
